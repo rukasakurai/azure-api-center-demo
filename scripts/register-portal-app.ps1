@@ -20,12 +20,18 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$host_ = (azd env get-value PORTAL_HOSTNAME 2>$null)
+# azd stores Bicep outputs under their literal output name, so this is
+# 'portalHostname' (camelCase), not PORTAL_HOSTNAME.
+$host_ = (azd env get-value portalHostname 2>$null)
 if ([string]::IsNullOrWhiteSpace($host_) -or $host_ -eq "null") {
-    Write-Error "PORTAL_HOSTNAME not found in the azd environment. Run 'azd provision' (or 'azd up') first."
+    Write-Error "portalHostname not found in the azd environment. Run 'azd provision' (or 'azd up') first."
     exit 1
 }
-$redirectUri = "https://$host_"
+# The portal's MSAL client uses the page URL (with a trailing slash) as the
+# redirect URI, e.g. https://<host>/. Register both the trailing-slash and
+# bare forms so sign-in can't fail with AADSTS50011 (redirect URI mismatch).
+$redirectUri = "https://$host_/"
+$redirectUriBare = "https://$host_"
 
 Write-Host "Portal redirect URI : $redirectUri"
 Write-Host "App display name    : $AppName"
@@ -39,9 +45,21 @@ else {
     Write-Host "Reusing existing app registration $appId"
 }
 
+# Entra is eventually consistent: a freshly created app may not be queryable
+# for a few seconds. Retry until it resolves before configuring it.
+$objId = $null
+foreach ($i in 1..10) {
+    $objId = (az ad app show --id $appId --query id -o tsv 2>$null)
+    if (-not [string]::IsNullOrWhiteSpace($objId)) { break }
+    Start-Sleep -Seconds 3
+}
+if ([string]::IsNullOrWhiteSpace($objId)) {
+    Write-Error "App $appId did not become queryable in time. Re-run the script."
+    exit 1
+}
+
 # Ensure the single-page-application redirect URI is set (API Center portal is a SPA).
-$objId = (az ad app show --id $appId --query id -o tsv)
-$body = @{ spa = @{ redirectUris = @($redirectUri) } } | ConvertTo-Json -Compress
+$body = @{ spa = @{ redirectUris = @($redirectUri, $redirectUriBare) } } | ConvertTo-Json -Compress
 az rest --method PATCH `
     --url "https://graph.microsoft.com/v1.0/applications/$objId" `
     --headers "Content-Type=application/json" `
