@@ -1,0 +1,6 @@
+name: azure-api-center-demo
+metadata:
+  template: azure-api-center-demo@0.0.1-beta
+infra:
+  provider: bicep
+  path: infra
