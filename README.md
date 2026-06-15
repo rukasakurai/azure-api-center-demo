@@ -20,6 +20,8 @@ Using `azd up`, this repo provisions:
 
 These entries are intentionally lightweight and serve as a starting registry model you can extend with versions, definitions, environments, metadata, and governance policies.
 
+> Note: The Bicep template defaults to the `Free` API Center SKU for low-cost exploration. For broader evaluation (capacity/features), set `apiCenterSku` to `Standard`.
+
 ## Prerequisites
 
 - Azure subscription with permission to create resources
@@ -48,6 +50,7 @@ You can customize deployment values in your azd environment:
 ```bash
 azd env set AZURE_LOCATION <region>
 azd env set apiCenterName <unique-api-center-name>
+azd env set apiCenterSku Standard
 ```
 
 Then re-run:

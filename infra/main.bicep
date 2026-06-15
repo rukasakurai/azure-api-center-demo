@@ -4,6 +4,13 @@ param location string = resourceGroup().location
 @description('Name of the Azure API Center service.')
 param apiCenterName string = 'apic-${uniqueString(subscription().id, resourceGroup().id)}'
 
+@description('Azure API Center SKU. Free is default for low-cost demo environments.')
+@allowed([
+  'Free'
+  'Standard'
+])
+param apiCenterSku string = 'Free'
+
 @description('Optional tags applied to all resources in this demo.')
 param tags object = {}
 
@@ -11,7 +18,7 @@ resource apiCenter 'Microsoft.ApiCenter/services@2024-03-01-preview' = {
   name: apiCenterName
   location: location
   sku: {
-    name: 'Free'
+    name: apiCenterSku
   }
   tags: tags
   properties: {}
