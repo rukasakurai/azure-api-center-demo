@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "usecaseCoachMcpEndpoint": {
+      "value": "${USECASE_COACH_MCP_ENDPOINT}"
+    },
+    "catalogReadersPrincipalId": {
+      "value": "${CATALOG_READERS_PRINCIPAL_ID}"
+    },
+    "portalEntraClientId": {
+      "value": "${PORTAL_ENTRA_CLIENT_ID}"
+    }
+  }
+}
