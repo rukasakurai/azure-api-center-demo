@@ -69,7 +69,6 @@ resource mcpServer 'Microsoft.ApiCenter/services/workspaces/apis@2024-06-01-prev
     kind: 'mcp'
     summary: 'Remote Model Context Protocol server exposing GitHub tools.'
     description: 'Demonstrates how Azure API Center can register MCP servers in an Entra-protected internal catalog.'
-    lifecycleStage: 'production'
   }
 }
 
