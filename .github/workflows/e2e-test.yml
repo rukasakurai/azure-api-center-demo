@@ -1,0 +1,97 @@
+name: E2E Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      cleanup:
+        description: "Run azd down after tests"
+        required: false
+        type: boolean
+        default: true
+      environment:
+        description: "azd environment name"
+        required: false
+        type: string
+      location:
+        description: "Azure region"
+        required: false
+        type: string
+        default: "japaneast"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZD_ENVIRONMENT: ${{ inputs.environment || format('gha-e2e-{0}-{1}', github.run_id, github.run_attempt) }}
+  AZD_LOCATION: ${{ inputs.location || 'japaneast' }}
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install azd
+        uses: Azure/setup-azd@v2
+
+      - name: Azure Login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Authenticate azd with federated credential
+        run: azd auth login --client-id "${{ vars.AZURE_CLIENT_ID }}" --federated-credential-provider github --tenant-id "${{ secrets.AZURE_TENANT_ID }}"
+
+      - name: Initialize azd environment
+        run: |
+          azd env new "$AZD_ENVIRONMENT" || true
+          azd env select "$AZD_ENVIRONMENT"
+          azd env set AZURE_LOCATION "$AZD_LOCATION"
+          azd env set AZURE_SUBSCRIPTION_ID "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          azd env set AZURE_RESOURCE_GROUP "rg-$AZD_ENVIRONMENT"
+
+      - name: Create resource group
+        run: |
+          args=(-n "rg-$AZD_ENVIRONMENT" -l "$AZD_LOCATION")
+          if [ -n "$RG_TAG_NAME" ]; then
+            args+=(--tags "$RG_TAG_NAME=$RG_TAG_VALUE")
+          fi
+          az group create "${args[@]}"
+        env:
+          RG_TAG_NAME: ${{ secrets.RG_TAG_NAME }}
+          RG_TAG_VALUE: ${{ secrets.RG_TAG_VALUE }}
+
+      - name: Provision infrastructure (azd provision)
+        run: azd provision --no-prompt
+
+      - name: Deploy application (azd deploy with retries)
+        run: |
+          MAX_RETRIES=5
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "=== azd deploy attempt $i/$MAX_RETRIES ==="
+            if azd deploy --no-prompt; then
+              echo "azd deploy succeeded on attempt $i"
+              break
+            fi
+            if [ "$i" -eq "$MAX_RETRIES" ]; then
+              echo "::error::azd deploy failed after $MAX_RETRIES attempts"
+              exit 1
+            fi
+            WAIT=$((i * 30))
+            echo "::warning::azd deploy failed (attempt $i/$MAX_RETRIES). Retrying in ${WAIT}s..."
+            sleep "$WAIT"
+          done
+
+      - name: Run tests
+        run: |
+          echo "Add your E2E test commands here."
+          echo "For example: pytest tests/e2e/ or npm test"
+
+      - name: Cleanup (azd down)
+        if: always() && (inputs.cleanup != false || github.event_name == 'pull_request')
+        run: azd down --no-prompt --force --purge
