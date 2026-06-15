@@ -37,6 +37,18 @@ The endpoint itself is protected by Microsoft Entra (the deployed server enforce
 
 > Note: The Bicep template defaults to the `Free` API Center SKU for low-cost exploration. For broader evaluation (capacity/features), set `apiCenterSku` to `Standard`.
 
+### Sharing with colleagues who don't use Azure (e.g. Microsoft 365 Copilot)
+
+`azd up` provisions the **Azure-side catalog entry and the registered runtime endpoint**. It does **not** by itself make the MCP server consumable by people without Azure access — Azure API Center is a catalog/governance layer, not a runtime gateway. Reaching non-Azure colleagues takes one or both of the following, which live in **different toolchains**:
+
+1. **Discovery without Azure access — the API Center self-service portal.**
+   The portal (`https://<service>.portal.<region>.azure-apicenter.ms`) lets any Microsoft Entra tenant member sign in and browse assets **without an Azure RBAC role**. Enabling it currently requires a portal/identity-provider configuration step that has **no Azure Resource Manager (ARM) or Bicep surface today** (verified: the service exposes only `portalHostname`; there is no portal-config ARM resource), so it cannot be provisioned by `azd up`. Enable it once via **API center → Consumption → Portal settings → Configure Entra ID → Save + publish** (single-tenant). See [Set up the API Center portal](https://learn.microsoft.com/azure/api-center/set-up-api-center-portal). After that, colleagues just sign in with their Entra account.
+
+2. **Actually using the server from Microsoft 365 Copilot — a Copilot agent.**
+   M365 Copilot consumes external tools through **agents**, not through API Center. Build an agent that points at your MCP endpoint and publish it to your tenant using either [Copilot Studio](https://learn.microsoft.com/microsoft-copilot-studio/) (add the MCP server as a tool) or the [Microsoft 365 Agents Toolkit](https://learn.microsoft.com/microsoft-365-copilot/extensibility/) (declarative agent). These publish to Microsoft 365 / Teams admin — **not** through `azd`/Azure. Your server's Entra protection satisfies the OAuth sign-in the agent performs on each colleague's behalf.
+
+In short: this repo's `azd up` gives you the governed catalog entry + endpoint registration that the steps above build on; the portal-enablement and the M365 Copilot agent are deliberately out of scope because neither has an `azd`/Bicep provisioning path today.
+
 ## Prerequisites
 
 - Azure subscription with permission to create resources
