@@ -7,6 +7,9 @@
     },
     "catalogReadersPrincipalId": {
       "value": "${CATALOG_READERS_PRINCIPAL_ID}"
+    },
+    "portalEntraClientId": {
+      "value": "${PORTAL_ENTRA_CLIENT_ID}"
     }
   }
 }

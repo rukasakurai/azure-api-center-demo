@@ -32,6 +32,14 @@ param catalogReadersPrincipalType string = 'Group'
 
 var hasCatalogReaders = !empty(catalogReadersPrincipalId)
 
+@description('Microsoft Entra application (client) ID used by the API Center portal for user sign-in. When set, the deployment publishes the Entra-protected discovery portal so tenant colleagues can browse and connect to registered assets (including the MCP server) without an Azure subscription. Set it with "azd env set PORTAL_ENTRA_CLIENT_ID <appId>"; leave empty to skip publishing the portal. The app registration is created separately (see README) because it requires Microsoft Entra directory permissions.')
+param portalEntraClientId string = ''
+
+@description('Microsoft Entra tenant ID for portal sign-in. Defaults to the deployment tenant so only members of your tenant can sign in.')
+param portalEntraTenantId string = tenant().tenantId
+
+var configurePortal = !empty(portalEntraClientId)
+
 // Built-in role: Azure API Center Data Reader
 var apiCenterDataReaderRoleId = 'c7244dfb-f447-457d-b2ba-3999044d1706'
 
@@ -175,6 +183,22 @@ resource catalogReadersAssignment 'Microsoft.Authorization/roleAssignments@2022-
   }
 }
 
+@description('Optional: publish the Entra-protected API Center discovery portal so colleagues without Azure access can find and connect to the registered assets. Sign-in is restricted to the configured tenant; access to asset data is governed by the "Azure API Center Data Reader" role. Created only when portalEntraClientId is supplied.')
+resource portal 'Microsoft.ApiCenter/services/portals@2024-06-01-preview' = if (configurePortal) {
+  parent: apiCenter
+  name: 'default'
+  properties: {
+    title: apiCenter.name
+    enabled: true
+    allowAnonymousAccess: false
+    authentication: {
+      clientId: portalEntraClientId
+      tenantId: portalEntraTenantId
+      authMode: 'azureRbac'
+    }
+  }
+}
+
 output apiCenterResourceId string = apiCenter.id
 output apiCenterNameOutput string = apiCenter.name
 output skillName string = skill.name
@@ -182,4 +206,6 @@ output agentName string = agent.name
 output mcpServerName string = mcpServer.name
 output mcpEndpointConfigured bool = hasMcpEndpoint
 output catalogReadersConfigured bool = hasCatalogReaders
+output portalConfigured bool = configurePortal
+output portalHostname string = any(apiCenter.properties).portalHostname
 output pluginName string = plugin.name
