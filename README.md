@@ -39,7 +39,11 @@ The endpoint itself is protected by Microsoft Entra (the deployed server enforce
 
 ### Sharing with colleagues who don't use Azure
 
-A colleague in your Microsoft Entra tenant who has **no Azure access** can still discover and connect to your registered MCP server through the **API Center self-service portal** — an Azure-managed website where they sign in with their normal Entra account. This repo can publish that portal as part of `azd up`.
+A colleague in your Microsoft Entra tenant can discover and connect to your registered MCP server through the **API Center self-service portal** — an Azure-managed website where they sign in with their normal Entra account. They never need their own Azure subscription, the Azure portal, or the `az` CLI. This repo can publish that portal as part of `azd up`.
+
+> **They do, however, need one Azure RBAC role assignment.** The portal's only tenant-restricted auth mode is `azureRbac`, so each viewer's Entra identity must be granted the **Azure API Center Data Reader** role on this resource (step 2 below). The colleague never *uses* Azure — but you (or an admin) make a single role assignment against their identity or, better, an Entra group they belong to. The alternative auth mode, `allowAnonymousAccess: true`, would make the portal fully public and is intentionally not used here.
+
+> **Do you even need the portal?** The MCP server is already Entra-protected, so the endpoint URL itself is the security boundary — sharing it in a Teams channel, wiki, or doc is a perfectly valid way for colleagues to discover and connect. The portal adds value only when you want a **governed, searchable catalog** (multiple servers/APIs, filtering, a single front door) rather than a copy-pasted link. If a link is enough today, skip the portal and just share the endpoint.
 
 The portal is the `Microsoft.ApiCenter/services/portals` resource (`infra/main.bicep`). It is configured for `azureRbac` auth and sign-in is restricted to your tenant. Two pieces are required:
 
