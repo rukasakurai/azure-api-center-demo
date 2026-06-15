@@ -14,9 +14,12 @@ param apiCenterSku string = 'Free'
 @description('Optional tags applied to all resources in this demo.')
 param tags object = {}
 
-resource apiCenter 'Microsoft.ApiCenter/services@2024-03-01-preview' = {
+resource apiCenter 'Microsoft.ApiCenter/services@2024-06-01-preview' = {
   name: apiCenterName
   location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
   sku: {
     name: apiCenterSku
   }
@@ -24,55 +27,73 @@ resource apiCenter 'Microsoft.ApiCenter/services@2024-03-01-preview' = {
   properties: {}
 }
 
-resource a2aApi 'Microsoft.ApiCenter/services/apis@2024-03-01-preview' = {
+@description('The default workspace is created automatically with the service; declare it so assets can be parented to it.')
+resource workspace 'Microsoft.ApiCenter/services/workspaces@2024-06-01-preview' = {
   parent: apiCenter
-  name: 'a2a-servers'
+  name: 'default'
   properties: {
-    title: 'A2A Servers'
-    kind: 'rest'
-    summary: 'Registry entry representing enterprise A2A server endpoints and metadata.'
-    description: 'Demonstrates how Azure API Center can organize A2A server APIs in an Entra-protected internal catalog.'
+    title: 'Default workspace'
+    description: 'Default workspace'
   }
 }
 
-resource mcpApi 'Microsoft.ApiCenter/services/apis@2024-03-01-preview' = {
-  parent: apiCenter
-  name: 'mcp-servers'
+@description('Skill asset: a reusable capability that AI agents can discover and consume.')
+resource skill 'Microsoft.ApiCenter/services/workspaces/skills@2024-06-01-preview' = {
+  parent: workspace
+  name: 'code-review-skill'
   properties: {
-    title: 'MCP Servers'
-    kind: 'rest'
-    summary: 'Registry entry representing enterprise Model Context Protocol servers.'
-    description: 'Demonstrates how Azure API Center can organize MCP server APIs in an Entra-protected internal catalog.'
+    title: 'Code Review Skill'
+    summary: 'Performs automated code reviews using static analysis.'
+    description: 'Demonstrates how Azure API Center can register reusable agent skills in an Entra-protected internal catalog.'
+    lifecycleStage: 'production'
   }
 }
 
-resource skillsApi 'Microsoft.ApiCenter/services/apis@2024-03-01-preview' = {
-  parent: apiCenter
-  name: 'agent-skills'
+@description('Agent asset (for example, an A2A agent) registered in the API Center inventory.')
+resource agent 'Microsoft.ApiCenter/services/workspaces/agents@2024-06-01-preview' = {
+  parent: workspace
+  name: 'help-desk-agent'
   properties: {
-    title: 'Agent Skills'
-    kind: 'rest'
-    summary: 'Registry entry representing reusable enterprise agent skills.'
-    description: 'Demonstrates how Azure API Center can organize skill APIs in an Entra-protected internal catalog.'
+    title: 'Help Desk Agent'
+    summary: 'Answers common help desk questions.'
+    description: 'Demonstrates how Azure API Center can register agents (including A2A agents) in an Entra-protected internal catalog.'
   }
 }
 
-resource pluginsApi 'Microsoft.ApiCenter/services/apis@2024-03-01-preview' = {
-  parent: apiCenter
-  name: 'plugins'
+@description('MCP server asset, modeled as an API of kind "mcp".')
+resource mcpServer 'Microsoft.ApiCenter/services/workspaces/apis@2024-06-01-preview' = {
+  parent: workspace
+  name: 'github-mcp'
   properties: {
-    title: 'Plugins'
-    kind: 'rest'
-    summary: 'Registry entry representing enterprise plugin APIs.'
-    description: 'Demonstrates how Azure API Center can organize plugin APIs in an Entra-protected internal catalog.'
+    title: 'GitHub MCP Server'
+    kind: 'mcp'
+    summary: 'Remote Model Context Protocol server exposing GitHub tools.'
+    description: 'Demonstrates how Azure API Center can register MCP servers in an Entra-protected internal catalog.'
   }
+}
+
+@description('Plugin asset that bundles already-registered skills and MCP servers via workspace-relative resource IDs.')
+resource plugin 'Microsoft.ApiCenter/services/workspaces/plugins@2024-06-01-preview' = {
+  parent: workspace
+  name: 'dev-toolkit'
+  properties: {
+    title: 'Dev Toolkit'
+    summary: 'A plugin that bundles a skill and an MCP server.'
+    description: 'Demonstrates how Azure API Center can bundle registered skills and MCP servers into a higher-level plugin.'
+    resourceIds: [
+      '/workspaces/default/skills/code-review-skill'
+      '/workspaces/default/apis/github-mcp'
+    ]
+  }
+  dependsOn: [
+    skill
+    mcpServer
+  ]
 }
 
 output apiCenterResourceId string = apiCenter.id
 output apiCenterNameOutput string = apiCenter.name
-output demoApiNames array = [
-  a2aApi.name
-  mcpApi.name
-  skillsApi.name
-  pluginsApi.name
-]
+output skillName string = skill.name
+output agentName string = agent.name
+output mcpServerName string = mcpServer.name
+output pluginName string = plugin.name
