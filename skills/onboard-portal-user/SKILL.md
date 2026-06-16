@@ -35,14 +35,25 @@ Grant a person access to the Azure API Center discovery portal and tell them how
 
 ### 1. Find the user's identity
 
+Requests usually arrive as a **display name** (e.g. from Teams), and some accounts have no `mail` set, so search by display name first:
+
+```bash
+az ad user list \
+  --filter "startswith(displayName,'<name>')" \
+  --query "[].{name:displayName, upn:userPrincipalName, id:id, mail:mail}" -o table
+```
+
+If you were given an email/UPN instead, search by that:
+
 ```bash
 az ad user list \
   --filter "mail eq '<email>' or userPrincipalName eq '<email>'" \
   --query "[].{name:displayName, upn:userPrincipalName, id:id, mail:mail}" -o table
 ```
 
-- **Found** → continue to step 3.
-- **Not found** → the user is external to the tenant; go to step 2 first.
+- **Exactly one match** → note the `id` and continue to step 3.
+- **Multiple matches** → disambiguate with the operator (e.g. by UPN) and use the correct `id`.
+- **No match** → the user is external to the tenant; go to step 2 first.
 
 ### 2. Invite as a guest (only if not found)
 
@@ -58,28 +69,21 @@ Tell the operator that **the user must accept the invitation** (and that accepta
 
 ### 3. Assign the Data Reader role
 
-Grant the **Azure API Center Data Reader** role on the API Center service. The role name below is fixed — do not substitute a broader role. Confirm the resolved object ID with the operator before running the assignment.
-
-First get the scope (and resolve the user's object ID, failing if the email is ambiguous):
+Grant the **Azure API Center Data Reader** role on the API Center service, using the object `id` you confirmed in step 1. The role name below is fixed — do not substitute a broader role.
 
 ```bash
 SCOPE="$(azd env get-values | sed -n 's/^apiCenterResourceId="\(.*\)"$/\1/p')"
-USER_ID="$(az ad user list --filter "mail eq '<email>' or userPrincipalName eq '<email>'" --query "[].id" -o tsv)"
-# Expect exactly one line. If empty, the user isn't in the tenant (invite first);
-# if more than one, pass the exact object ID instead.
-```
 
-Then assign (idempotent — skip if it already exists):
-
-```bash
-# Per-user:
-az role assignment create --assignee-object-id "$USER_ID" --assignee-principal-type User \
+# Per-user (USER_ID is the object id from step 1):
+az role assignment create --assignee-object-id "<user-object-id>" --assignee-principal-type User \
   --role "Azure API Center Data Reader" --scope "$SCOPE"
 
-# Group-based (preferred at scale; pass the group object ID):
+# Group-based (preferred at scale; pass the group object id):
 az role assignment create --assignee-object-id "<group-object-id>" --assignee-principal-type Group \
   --role "Azure API Center Data Reader" --scope "$SCOPE"
 ```
+
+If the assignment already exists, `create` returns an "already exists" error — treat that as success.
 
 For the group path, also add the user to the group:
 
@@ -88,6 +92,8 @@ az ad group member add --group "<group-id-or-name>" --member-id "<user-object-id
 ```
 
 ### 4. Verify
+
+The `create` response reports `roleDefinitionName` as `null`, so it looks inconclusive — this list command is the real confirmation. It should print `Azure API Center Data Reader`:
 
 ```bash
 az role assignment list \
