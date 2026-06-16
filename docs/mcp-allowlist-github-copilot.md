@@ -1,69 +1,74 @@
 # Using this demo to test the GitHub Copilot MCP allowlist
 
-How to use the API Center registry provisioned by this demo as the **MCP registry** behind GitHub Copilot Enterprise's *MCP server allowlist*, so that Copilot users in an enterprise can be restricted to the MCP servers catalogued here.
+How to use the API Center registry provisioned by this demo as the **MCP registry** behind GitHub Copilot's *MCP server allowlist*, so that Copilot users in an organization or enterprise can be restricted to the MCP servers catalogued here.
 
-> This is the **governance** companion to the README's registry/discovery story. The README explains how people *discover* registered MCP servers; this doc explains how an enterprise can *restrict* which MCP servers its Copilot users may use, sourced from the same registry.
+> [!WARNING]
+> **Untested draft.** The steps below were assembled from vendor documentation (see [Sources](#sources)) and have **not been executed end-to-end** against a live GitHub enterprise + API Center at the time of writing. Treat this as a directional guide, not a verified runbook. Validate each step against the current documentation before relying on it.
+
+> [!IMPORTANT]
+> **Preview status (as of 2026-06-16).** Several pieces below are in **public preview** and subject to change:
+> - GitHub's **MCP Registry URL** and **allowlist** policy are explicitly **public preview and subject to change** ([GitHub docs](https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-mcp-server-access)). They are available for **Copilot Business and Copilot Enterprise**.
+> - Allowlist **enforcement** is, as of this date, fully available in **VS Code Stable**; **Visual Studio** supports registry *discovery* only, with enforcement "coming in a future release" ([changelog, 2025-11-18](https://github.blog/changelog/2025-11-18-internal-mcp-registry-and-allowlist-controls-for-vs-code-stable-in-public-preview/)). Check the live [Supported surfaces table](https://docs.github.com/en/copilot/concepts/mcp-management#supported-surfaces) for the current matrix.
+> - Azure API Center's partner-MCP **Discover → MCP** experience is labelled **(preview)** in the Azure portal.
+> - The underlying [MCP registry API](https://github.com/modelcontextprotocol/registry) is at **v0.1** (an API freeze ahead of a future v1 GA), i.e. pre-GA.
 
 ## How the GitHub feature works
 
-GitHub Copilot Enterprise (and Organization) exposes MCP policy under **Settings → AI Controls → MCP**:
+GitHub Copilot exposes MCP policy under **Settings → AI Controls → MCP** (at the enterprise or organization level):
 
 - **MCP servers in Copilot** — turn MCP on/off for seat holders.
 - **MCP Registry URL** — the URL of a [specification-compliant MCP registry](https://github.com/modelcontextprotocol/registry). Servers listed there become discoverable to members in supported editors.
-- **Restrict MCP access to registry servers** — switch from *Allow all* to *Registry only* to limit members to the servers in that registry.
+- **Restrict MCP access to registry servers** — choose **Allow all** (registry servers are recommendations; any server may run) or **Registry only** (only servers in the registry may run; all others are blocked). The chosen policy applies to developers **immediately**.
 
-Key properties of the enforcement (see [GitHub's MCP allowlist enforcement reference](https://docs.github.com/en/copilot/reference/mcp-allowlist-enforcement)):
+Key properties of the enforcement ([GitHub: MCP allowlist enforcement](https://docs.github.com/en/copilot/reference/mcp-allowlist-enforcement)):
 
-- **Client-side, at connect time.** The Copilot integration in each supported surface evaluates the policy when an MCP server is loaded/connected — not on every tool call, so there is no per-call latency. A previously-configured, non-allowed server stops connecting after *Registry only* is set.
-- **Supported surfaces only.** VS Code, Visual Studio, JetBrains IDEs, Eclipse, Xcode, and Copilot CLI. **Not** the Copilot cloud agent, and nothing outside Copilot (a standalone MCP client is unaffected).
-- **Name/ID matching, bypassable.** Matching is by server name/ID and can be bypassed by editing local config; *installation* of non-registry servers is not yet blocked. Treat it as governance steering, not an airtight security boundary.
+- **Runtime, client-side, at server-connect time.** With *Registry only*, the Copilot integration in each supported surface blocks, **at runtime**, any server not in the registry — evaluated when a server is loaded/connected, not on every tool call (so no per-call latency). A previously-configured, non-allowed server stops connecting once the policy is set.
+- **Supported surfaces only.** Per the [Supported surfaces table](https://docs.github.com/en/copilot/concepts/mcp-management#supported-surfaces): VS Code, Visual Studio, JetBrains IDEs, Eclipse, Xcode, and Copilot CLI. **Not** the Copilot cloud agent, and nothing outside Copilot (a standalone MCP client is unaffected). Enforcement maturity varies by surface — see the preview note above.
+- **Remote vs. local strictness.** Remote servers are validated against **both the server name and the remote install URL** (strict). Local servers are validated against **server name only**, so local config can be edited to bypass the check. For strict requirements, GitHub recommends configuring **remote** servers only. *Installation* of non-registry servers is not yet blocked.
 
 ## Where API Center fits
 
-API Center implements the [v0.1 MCP registry API](https://github.com/modelcontextprotocol/registry). The data-plane registry endpoint of the service this demo provisions is:
+GitHub documents **Azure API Center as a supported option** for hosting the MCP registry ("a fully managed MCP registry with automatic CORS configuration"). The servers you register in this demo (for example `usecase-coach-mcp`) are exactly the catalog you would point the **MCP Registry URL** at.
 
-```
-https://<service>.data.<region>.azure-apicenter.ms/workspaces/default/v0.1/servers
-```
+Two specifics that are easy to get wrong:
 
-It supports the v0.1 read routes (`GET /v0.1/servers`, `.../servers/{serverName}/versions/latest`, `.../servers/{serverName}/versions/{version}`) and returns `Access-Control-Allow-Origin: *` with `Access-Control-Allow-Methods: GET` — the CORS shape GitHub's allowlist requires.
+1. **Use the base workspace URL — do not append `/v0.1/servers`.** Per GitHub's docs, the **MCP Registry URL** for API Center must be the workspace base URL:
 
-So conceptually, the MCP servers you register in this demo (for example `usecase-coach-mcp`) are exactly the catalog you would point the **MCP Registry URL** at to govern Copilot usage.
+   ```text
+   https://<service>.data.<region>.azure-apicenter.ms/workspaces/<workspace-name>
+   ```
 
-## The integration gap to be aware of
+   Example shape: `https://contoso-apic.data.eastus.azure-apicenter.ms/workspaces/default`. **Including a suffix like `/v0.1/servers` will cause the registry to error out**, because Copilot appends the MCP v0.1 path automatically.
 
-The native data-plane endpoint is an **OAuth 2.0 protected resource**. An anonymous request returns:
+2. **The registry must be anonymously readable.** GitHub Copilot fetches the registry **without authentication**. By default this demo's API Center data plane is **Entra-protected**: an anonymous request to the data-plane registry returns `401 Unauthorized` (RFC 9728 `WWW-Authenticate: Bearer …`, scope `https://azure-apicenter.net/user_impersonation`). To let Copilot read it, GitHub's documentation instructs you to **enable anonymous access in your API Center's visibility settings** ([Configure an MCP registry → Option 2](https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-mcp-registry)).
 
-```
-HTTP/1.1 401 Unauthorized
-WWW-Authenticate: Bearer resource_metadata="https://<service>.data.<region>.azure-apicenter.ms/.well-known/oauth-protected-resource"
-```
-
-The advertised metadata requires a Microsoft Entra Bearer token (authorization server = the tenant's `login.microsoftonline.com/<tenant>/v2.0`, scope = `https://azure-apicenter.net/user_impersonation`). This keeps discovery tenant-scoped, which is the point of the rest of this demo.
-
-GitHub Copilot's allowlist, however, **fetches the MCP Registry URL anonymously**. It therefore cannot read the Entra-protected endpoint directly — pointing the registry URL at the raw `…/v0.1/servers` host yields a 401 on GitHub's side.
-
-The server *listing* is non-sensitive catalog metadata (each MCP server still enforces its own runtime auth), so the way to test the GitHub feature end-to-end is to expose an **anonymously-readable** `v0.1/servers` listing in front of API Center — for example via an API gateway (Azure API Management) that proxies the v0.1 read routes and serves them without the Entra challenge while preserving the `*`/`GET` CORS headers. That gateway URL is what you put in **MCP Registry URL**.
-
-> This front door is intentionally **not** wired into this template: it would expose the catalog listing publicly, which conflicts with the tenant-scoped, public-safe defaults the rest of the demo follows. Add it deliberately, and only the read listing, when you want to exercise the GitHub allowlist.
+   > [!CAUTION]
+   > Enabling anonymous access makes the **server listing world-readable** (the listing is catalog metadata; each MCP server still enforces its own runtime auth). This **conflicts with the tenant-scoped, public-safe defaults** the rest of this demo deliberately follows — the README notes that `allowAnonymousAccess: true` is intentionally *not* used. Treat anonymous access as a deliberate, opt-in step taken only to exercise the GitHub allowlist, and assume all registry metadata may be public.
 
 ## Testing checklist
 
+> Unverified — see the warning at the top of this page.
+
 1. Provision the demo (`azd up`) so at least one MCP server (e.g. `usecase-coach-mcp`) is registered. See the [README](../README.md).
-2. Confirm the data-plane endpoint shape and that anonymous access is challenged:
+2. Enable **anonymous access** in your API Center's visibility settings (see the caution above about the trade-off).
+3. Confirm the base workspace URL is now anonymously readable:
    ```bash
    curl -sS -o /dev/null -w "%{http_code}\n" \
-     "https://<service>.data.<region>.azure-apicenter.ms/workspaces/default/v0.1/servers"   # expect 401
+     "https://<service>.data.<region>.azure-apicenter.ms/workspaces/<workspace-name>/v0.1/servers"   # expect 200
    ```
-3. Stand up an anonymously-readable proxy for the v0.1 read routes (e.g. API Management) that preserves `Access-Control-Allow-Origin: *` and `Access-Control-Allow-Methods: GET`.
-4. In GitHub **Settings → AI Controls → MCP**, set **MCP Registry URL** to the proxy's `…/v0.1/servers` URL and **Save**.
-5. Switch **Restrict MCP access to registry servers** to *Registry only*.
-6. In a supported editor signed into a seat governed by that org/enterprise, confirm that registry servers are usable and a non-registry server fails to connect with a "blocked by policy" indication.
+   (Before enabling anonymous access this returns `401`.)
+4. In GitHub **Settings → AI Controls → MCP**, ensure **MCP servers in Copilot** is *Enabled*, then set **MCP Registry URL** to the **base** workspace URL — `…/workspaces/<workspace-name>`, **without** the `/v0.1/servers` suffix — and **Save**.
+5. Switch **Restrict MCP access to registry servers** to **Registry only**.
+6. In a supported editor signed into a governed seat (VS Code Stable has full enforcement as of this date), confirm that registry servers are usable and a non-registry server fails to connect with a "blocked by policy" message.
 
-## Related
+## Sources
 
-- [README — registering and discovering the MCP server](../README.md#registering-the-mcp-server-endpoint)
-- [GitHub: Configure an MCP registry](https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-mcp-registry)
+Verified against the following on 2026-06-16:
+
+- [GitHub: Configure an MCP registry for your organization or enterprise](https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-mcp-registry)
+- [GitHub: Configure MCP server access for your organization or enterprise](https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-mcp-server-access)
 - [GitHub: MCP allowlist enforcement](https://docs.github.com/en/copilot/reference/mcp-allowlist-enforcement)
+- [GitHub: MCP server usage in your company (supported surfaces)](https://docs.github.com/en/copilot/concepts/mcp-management)
+- [GitHub Changelog: MCP registry and allowlist controls for VS Code Stable in public preview (2025-11-18)](https://github.blog/changelog/2025-11-18-internal-mcp-registry-and-allowlist-controls-for-vs-code-stable-in-public-preview/)
 - [Azure API Center: Inventory and discover MCP servers](https://learn.microsoft.com/azure/api-center/register-discover-mcp-server)
-- [MCP Registry specification](https://github.com/modelcontextprotocol/registry)
+- [MCP Registry specification (v0.1)](https://github.com/modelcontextprotocol/registry)
