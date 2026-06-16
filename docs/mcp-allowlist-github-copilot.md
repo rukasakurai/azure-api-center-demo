@@ -59,6 +59,9 @@ Two specifics that are easy to get wrong:
    (Before enabling anonymous access this returns `401`.)
 4. In GitHub **Settings → AI Controls → MCP**, ensure **MCP servers in Copilot** is *Enabled*, then set **MCP Registry URL** to the **base** workspace URL — `…/workspaces/<workspace-name>`, **without** the `/v0.1/servers` suffix — and **Save**.
 5. Switch **Restrict MCP access to registry servers** to **Registry only**.
+
+   > [!CAUTION]
+   > This policy **applies to developers immediately** and blocks any non-registry MCP server they have already configured. Test in a non-production organization (or a dedicated test enterprise) before applying it where people are actively working.
 6. In a supported editor signed into a governed seat (VS Code Stable has full enforcement as of this date), confirm that registry servers are usable and a non-registry server fails to connect with a "blocked by policy" message.
 
 ## Sources
