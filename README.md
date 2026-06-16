@@ -37,6 +37,8 @@ If your endpoint is protected by Microsoft Entra (the server enforces sign-in), 
 
 > The Bicep template can also **publish the Entra-protected discovery portal** (see [Sharing with people who don't use Azure](#sharing-with-people-who-dont-use-azure) below).
 
+> To use this registry to **govern which MCP servers Copilot users may use** (the GitHub Copilot Business/Enterprise MCP server allowlist feature, org- or enterprise-level), see [docs/mcp-allowlist-github-copilot.md](docs/mcp-allowlist-github-copilot.md).
+
 > Note: The Bicep template defaults to the `Free` API Center SKU for low-cost exploration. For broader evaluation (capacity/features), set `apiCenterSku` to `Standard`.
 
 ### Synchronizing Agent Skills from GitHub
