@@ -35,19 +35,11 @@ Grant a person access to the Azure API Center discovery portal and tell them how
 
 ### 1. Find the user's identity
 
-Requests usually arrive as a **display name** (e.g. from Teams), and some accounts have no `mail` set, so search by display name first:
+Requests usually arrive as a **display name** (e.g. from Teams), and some accounts have no `mail` set, so search by display name first (or by email/UPN if that's what you were given: `--filter "mail eq '<email>' or userPrincipalName eq '<email>'"`):
 
 ```bash
 az ad user list \
   --filter "startswith(displayName,'<name>')" \
-  --query "[].{name:displayName, upn:userPrincipalName, id:id, mail:mail}" -o table
-```
-
-If you were given an email/UPN instead, search by that:
-
-```bash
-az ad user list \
-  --filter "mail eq '<email>' or userPrincipalName eq '<email>'" \
   --query "[].{name:displayName, upn:userPrincipalName, id:id, mail:mail}" -o table
 ```
 
@@ -69,7 +61,7 @@ Tell the operator that **the user must accept the invitation** (and that accepta
 
 ### 3. Assign the Data Reader role
 
-Grant the **Azure API Center Data Reader** role on the API Center service, using the object `id` you confirmed in step 1. The role name below is fixed — do not substitute a broader role.
+Grant the **Azure API Center Data Reader** role on the API Center service, using the object `id` you confirmed in step 1.
 
 ```bash
 SCOPE="$(azd env get-values | sed -n 's/^apiCenterResourceId="\(.*\)"$/\1/p')"
@@ -106,7 +98,7 @@ az role assignment list \
 
 Produce a short, friendly Japanese message for the user. Write from the **recipient's** perspective — avoid internal/admin concepts such as "tenant" or RBAC. Choose the variant that matches the user's situation rather than asking them to figure out which case applies: include the invitation-acceptance step **only** if you invited them as a guest. Remind them that access may take a few minutes to take effect and a fresh sign-in may be needed. Use the portal URL from the azd environment.
 
-Template (fill the placeholders; keep real values only in the live message you hand to the operator, never in committed files):
+Template (fill the placeholders):
 
 ```
 <name> さん
