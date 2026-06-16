@@ -4,7 +4,7 @@ A runbook for granting someone access to the **API Center discovery portal** whe
 
 This is the operational companion to the README's [Sharing with people who don't use Azure](../README.md#sharing-with-people-who-dont-use-azure) section: the README explains *why* access works the way it does; this doc is the *what to do* when a request comes in.
 
-> To run this flow with GitHub Copilot — including drafting a Japanese message for the user — use the [`onboard-portal-user`](../skills/onboard-portal-user/SKILL.md) Agent Skill, which wraps the steps below and bundles the role-assignment script.
+> To run this flow with GitHub Copilot — including drafting a Japanese message for the user — use the [`onboard-portal-user`](../skills/onboard-portal-user/SKILL.md) Agent Skill, which wraps the steps below.
 
 ## The symptom
 

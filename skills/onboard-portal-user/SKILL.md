@@ -20,7 +20,7 @@ Grant a person access to the Azure API Center discovery portal and tell them how
 2. **Never expose non-public details in committed artifacts.** This repository is public. Real names, email addresses, object IDs, tenant/subscription IDs, resource IDs, and hostnames may appear in your live session output, but must never be written into files, commits, issues, or PRs. Use placeholders there.
 3. **Privileged operation.** The operator must be signed in (`az login`) to the tenant/subscription that hosts the API Center, with permission to assign roles (and to invite guests, if needed).
 4. **Prefer groups at scale.** A one-off direct user assignment is fine, but if a readers group exists, prefer adding the user to it over a per-user role assignment.
-5. **Only the bundled script mutates RBAC.** Do not run ad-hoc `az role assignment` (or other grant) commands directly; the sole permitted RBAC mutation is `scripts/assign-portal-reader.sh`, which hardcodes the read-only Data Reader role.
+5. **Grant only the read-only role.** The only role this skill assigns is **Azure API Center Data Reader**. Never substitute a broader role or run other grant commands.
 
 ## Inputs
 
@@ -56,19 +56,29 @@ az rest --method POST \
 
 Tell the operator that **the user must accept the invitation** (and that acceptance is manual and asynchronous) before the role assignment will let them in. Re-run step 1 to confirm the guest object now exists.
 
-### 3. Assign the Data Reader role (deterministic, via the bundled script)
+### 3. Assign the Data Reader role
 
-Use the bundled script — it resolves the identity, is idempotent, and performs the privileged RBAC mutation in a reviewable way. Confirm with the operator before running.
+Grant the **Azure API Center Data Reader** role on the API Center service. The role name below is fixed — do not substitute a broader role. Confirm the resolved object ID with the operator before running the assignment.
+
+First get the scope (and resolve the user's object ID, failing if the email is ambiguous):
 
 ```bash
-# Per-user (resolves email -> object id, reads scope from the azd env):
-./scripts/assign-portal-reader.sh --assignee "<email>"
+SCOPE="$(azd env get-values | sed -n 's/^apiCenterResourceId="\(.*\)"$/\1/p')"
+USER_ID="$(az ad user list --filter "mail eq '<email>' or userPrincipalName eq '<email>'" --query "[].id" -o tsv)"
+# Expect exactly one line. If empty, the user isn't in the tenant (invite first);
+# if more than one, pass the exact object ID instead.
+```
 
-# Group-based (preferred at scale; pass the group object id):
-./scripts/assign-portal-reader.sh --assignee "<group-object-id>" --type Group
+Then assign (idempotent — skip if it already exists):
 
-# Explicit scope (when not using azd):
-./scripts/assign-portal-reader.sh --assignee "<email>" --scope "<api-center-resource-id>"
+```bash
+# Per-user:
+az role assignment create --assignee-object-id "$USER_ID" --assignee-principal-type User \
+  --role "Azure API Center Data Reader" --scope "$SCOPE"
+
+# Group-based (preferred at scale; pass the group object ID):
+az role assignment create --assignee-object-id "<group-object-id>" --assignee-principal-type Group \
+  --role "Azure API Center Data Reader" --scope "$SCOPE"
 ```
 
 For the group path, also add the user to the group:
@@ -117,6 +127,5 @@ If you invited the user as a guest, add a first step before signing in, in plain
 
 ## Notes
 
-- The bundled `scripts/assign-portal-reader.sh` is the only component that mutates RBAC; keep judgment, identity resolution edge cases, and messaging in this orchestration layer.
 - This is an administrator tool. It is intentionally not registered in the public discovery catalog.
 - Background and the equivalent manual runbook live in [docs/onboarding-portal-users.md](../../docs/onboarding-portal-users.md).
