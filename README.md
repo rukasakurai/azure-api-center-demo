@@ -78,7 +78,7 @@ gh skill install <github-repo-url> # install into your agent (GitHub Copilot, Cl
 
 Agent Skills are installed and used **as skills** — they don't need to be packaged as plugins. The skill is installed straight from its source of truth (GitHub).
 
-> The API Center portal's per-skill **"Discover this skill"** snippet shows only `/plugin marketplace browse <service-name>`. Note that this snippet (a) is the *plugin marketplace* path, not the skill-native install above, and (b) is incomplete — `browse` only works after you first run `/plugin marketplace add <endpoint-url>` against an enabled marketplace endpoint. For installing Agent Skills, prefer `gh skill install` from the GitHub Source URL.
+> The API Center portal's per-skill **"Discover this skill"** snippet defaults to showing only `/plugin marketplace browse <service-name>`. Two things to know: (a) it's the *plugin marketplace* path, not the skill-native install above; and (b) `browse` only works after the one-time `/plugin marketplace add <endpoint-url>` step — which the portal hides behind the snippet's **Expand** control, so it's easy to miss. For installing Agent Skills, prefer `gh skill install` from the GitHub Source URL.
 
 > Optional: API Center can also expose inventory items through a separate [plugin marketplace](https://learn.microsoft.com/azure/api-center/enable-api-center-plugin-marketplace) endpoint, which an agent CLI installs from with `/plugin install`. That path repackages skills as *plugins* and is unrelated to the skill-native `gh skill install` flow above; this demo focuses on Agent Skills, so it isn't required here.
 
