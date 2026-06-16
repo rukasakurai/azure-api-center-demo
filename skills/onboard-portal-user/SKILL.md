@@ -94,7 +94,7 @@ Template (fill the placeholders; keep real values only in the live message you h
 ```
 <name> さん
 
-API Center ポータルへのアクセス権を付与しました 🎉
+API Center ポータルへのアクセス権を付与しました
 以下の手順でご利用いただけます。
 
 1. こちらのポータルを開いてください: <portal-url>
