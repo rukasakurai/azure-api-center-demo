@@ -40,6 +40,11 @@ param portalEntraTenantId string = tenant().tenantId
 
 var configurePortal = !empty(portalEntraClientId)
 
+@description('GitHub repository (tree URL) whose Agent Skills are automatically synchronized into the API Center inventory. Leave empty to use the default public rukasakurai/agent-skills repo. Each skill is discovered by the "**/SKILL.md" file pattern per the Agent Skills specification (https://agentskills.io); the rest of the standard skill files and folders belong to that skill. Because this repository is public, only a public repository URL belongs here. Set it with "azd env set AGENT_SKILLS_REPOSITORY_URL <url>".')
+param agentSkillsRepositoryUrl string = ''
+
+var agentSkillsRepositoryUrlEffective = empty(agentSkillsRepositoryUrl) ? 'https://github.com/rukasakurai/agent-skills/tree/main/skills' : agentSkillsRepositoryUrl
+
 // Built-in role: Azure API Center Data Reader
 var apiCenterDataReaderRoleId = 'c7244dfb-f447-457d-b2ba-3999044d1706'
 
@@ -172,6 +177,43 @@ resource plugin 'Microsoft.ApiCenter/services/workspaces/plugins@2024-06-01-prev
   ]
 }
 
+@description('Deployment environment representing the GitHub repository that the Agent Skills are synchronized from.')
+resource agentSkillsEnvironment 'Microsoft.ApiCenter/services/workspaces/environments@2024-06-01-preview' = {
+  parent: workspace
+  name: 'github-agent-skills'
+  properties: {
+    title: 'Agent Skills (GitHub)'
+    kind: 'production'
+  }
+}
+
+@description('Git integration (API source) that continuously synchronizes Agent Skills from the public GitHub repository into the API Center inventory. Note: the "gitSource" shape is accepted by the live API Center resource provider but is not yet part of the published apiSources ARM type, so Bicep emits BCP037 "property not allowed" warnings on apiSourceType and gitSource; these are expected and the deployment succeeds.')
+resource agentSkillsSource 'Microsoft.ApiCenter/services/workspaces/apiSources@2024-06-01-preview' = {
+  parent: workspace
+  name: 'github-agent-skills'
+  properties: {
+    #disable-next-line BCP037
+    apiSourceType: 'Git'
+    #disable-next-line BCP037
+    gitSource: {
+      repositoryUrl: agentSkillsRepositoryUrlEffective
+      gitProvider: 'github'
+      assetTypes: [
+        {
+          assetType: 'skill'
+          filesToInclude: '**/SKILL.md'
+        }
+      ]
+    }
+    importSpecification: 'ondemand'
+    targetEnvironmentId: '/workspaces/default/environments/github-agent-skills'
+    targetLifecycleStage: 'production'
+  }
+  dependsOn: [
+    agentSkillsEnvironment
+  ]
+}
+
 @description('Optional: grant a group (or user) read access to the catalog so its members can discover the registered assets in the Azure portal and tooling. Created only when a principal ID is supplied.')
 resource catalogReadersAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (hasCatalogReaders) {
   name: guid(apiCenter.id, catalogReadersPrincipalId, apiCenterDataReaderRoleId)
@@ -209,3 +251,4 @@ output catalogReadersConfigured bool = hasCatalogReaders
 output portalConfigured bool = configurePortal
 output portalHostname string = any(apiCenter.properties).portalHostname
 output pluginName string = plugin.name
+output agentSkillsRepositoryUrlOutput string = agentSkillsRepositoryUrlEffective
