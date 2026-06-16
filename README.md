@@ -118,6 +118,8 @@ The portal is the `Microsoft.ApiCenter/services/portals` resource (`infra/main.b
 
 Once published, people open `https://<service>.portal.<region>.azure-apicenter.ms`, sign in with their Entra account, find the `usecase-coach-mcp` server, and copy its runtime endpoint to register it in any MCP-capable HTTP client (for example a Microsoft 365 Copilot agent built in [Copilot Studio](https://learn.microsoft.com/microsoft-copilot-studio/) or the [Microsoft 365 Agents Toolkit](https://learn.microsoft.com/microsoft-365-copilot/extensibility/)). Any Entra protection on the endpoint still applies when they connect.
 
+> When a user reports the *"You don't have permission to access this developer portal"* error, see [docs/onboarding-portal-users.md](docs/onboarding-portal-users.md) for how to grant access.
+
 > Fully hands-off alternative: the app registration can instead be created in the same deployment with the [Microsoft Graph Bicep extension](https://learn.microsoft.com/graph/templates/bicep/overview-bicep-templates-for-graph) (`Microsoft.Graph/applications` + `servicePrincipals`), giving a true single-`azd up`. It is not the default here because it requires the preview extension plus directory permissions for every deployer.
 
 ## Prerequisites
