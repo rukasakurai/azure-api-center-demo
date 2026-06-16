@@ -58,14 +58,20 @@ fi
 # Resolve a User email/UPN to an object id. Groups must already be an object id.
 OBJECT_ID="$ASSIGNEE"
 if [[ "$TYPE" == "User" && "$ASSIGNEE" == *"@"* ]]; then
-  OBJECT_ID="$(az ad user list \
+  MATCHES="$(az ad user list \
     --filter "mail eq '${ASSIGNEE}' or userPrincipalName eq '${ASSIGNEE}'" \
-    --query "[0].id" -o tsv 2>/dev/null || true)"
-  if [[ -z "$OBJECT_ID" || "$OBJECT_ID" == "None" ]]; then
+    --query "[].id" -o tsv 2>/dev/null || true)"
+  COUNT="$(printf '%s' "$MATCHES" | grep -c . || true)"
+  if [[ "${COUNT:-0}" -eq 0 ]]; then
     echo "Error: no user found for '${ASSIGNEE}' in this tenant." >&2
     echo "If they are external, invite them as a guest and have them accept the invitation first." >&2
     exit 1
   fi
+  if [[ "${COUNT}" -gt 1 ]]; then
+    echo "Error: '${ASSIGNEE}' matched ${COUNT} users; pass the exact object id via --assignee instead." >&2
+    exit 1
+  fi
+  OBJECT_ID="$MATCHES"
 fi
 
 # Idempotency: do nothing if the assignment already exists.

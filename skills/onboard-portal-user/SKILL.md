@@ -20,6 +20,7 @@ Grant a person access to the Azure API Center discovery portal and tell them how
 2. **Never expose non-public details in committed artifacts.** This repository is public. Real names, email addresses, object IDs, tenant/subscription IDs, resource IDs, and hostnames may appear in your live session output, but must never be written into files, commits, issues, or PRs. Use placeholders there.
 3. **Privileged operation.** The operator must be signed in (`az login`) to the tenant/subscription that hosts the API Center, with permission to assign roles (and to invite guests, if needed).
 4. **Prefer groups at scale.** A one-off direct user assignment is fine, but if a readers group exists, prefer adding the user to it over a per-user role assignment.
+5. **Only the bundled script mutates RBAC.** Do not run ad-hoc `az role assignment` (or other grant) commands directly; the sole permitted RBAC mutation is `scripts/assign-portal-reader.sh`, which hardcodes the read-only Data Reader role.
 
 ## Inputs
 
