@@ -65,6 +65,28 @@ azd up
 
 > Implementation note: the `gitSource` property is accepted by the live API Center resource provider but is not yet part of the published `apiSources` ARM type, so `bicep build` emits expected `BCP037` warnings (suppressed inline in `infra/main.bicep`). The deployment succeeds regardless.
 
+### Discovering and installing the synced skills
+
+Once skills are in the inventory, consumers can browse and install them from the **API Center [plugin marketplace](https://learn.microsoft.com/azure/api-center/enable-api-center-plugin-marketplace)** using an agent CLI (for example, the GitHub Copilot CLI). The marketplace exposes both MCP servers and Agent Skills as installable plugins.
+
+1. **Enable the plugin marketplace endpoint (one time).** In the Azure portal, open the API Center → **Consumption → Data API settings → Enable plugin marketplace endpoint → Save**. This is a data-plane setting that is **not** exposed by the API Center ARM provider, so it cannot be set from Bicep today. After enabling, the page shows the endpoint URL, of the form:
+
+   ```text
+   https://<service-name>.data.<region>.azure-apicenter.ms/workspaces/default/plugins/marketplace.git
+   ```
+
+2. **Add the marketplace, then browse and install.** The portal's "Discover this skill" snippet shows only `browse`/`install`, but those require the marketplace to be **added** first:
+
+   ```text
+   /plugin marketplace add https://<service-name>.data.<region>.azure-apicenter.ms/workspaces/default/plugins/marketplace.git
+   /plugin marketplace browse <service-name>
+   /plugin install <skill-name>@<service-name>
+   ```
+
+   Skills install through the unified `/plugin` surface even though they remain typed as **Skills** in the inventory.
+
+> Discovery and installation are still tenant-scoped: the marketplace endpoint is only reachable by identities granted Azure RBAC access on the API Center service.
+
 
 ### Sharing with people who don't use Azure
 
