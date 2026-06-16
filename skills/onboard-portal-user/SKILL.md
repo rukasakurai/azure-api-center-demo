@@ -87,26 +87,31 @@ az role assignment list \
 
 ### 5. Draft the Japanese message
 
-Produce a short, friendly Japanese message for the user. Adapt it to whether they were a guest (mention the invite/acceptance step) or already in the tenant, and remind them that role propagation can take a few minutes and a fresh sign-in may be needed. Use the portal URL from the azd environment.
+Produce a short, friendly Japanese message for the user. Write from the **recipient's** perspective — avoid internal/admin concepts such as "tenant" or RBAC. Choose the variant that matches the user's situation rather than asking them to figure out which case applies: include the invitation-acceptance step **only** if you invited them as a guest. Remind them that access may take a few minutes to take effect and a fresh sign-in may be needed. Use the portal URL from the azd environment.
 
 Template (fill the placeholders; keep real values only in the live message you hand to the operator, never in committed files):
 
 ```
 <name> さん
 
-API Center ポータルへのアクセス権を付与しました
+API Center ポータルへのアクセス権を付与しました。
 以下の手順でご利用いただけます。
 
 1. こちらのポータルを開いてください: <portal-url>
-2. お使いの Entra アカウントでサインインしてください。
-   （別テナントにご招待した場合は、先に招待メールから承諾をお願いします）
+2. お使いのアカウントでサインインしてください。
 3. 「MCP servers」から目的のサーバーを見つけ、エンドポイント URL をコピーします。
 4. そのエンドポイントを MCP 対応クライアントに登録してご利用ください。
 
-※ 権限の反映に数分かかることがあります。エラーが続く場合は、一度サインアウトして
-   再度サインインしてみてください。
+※ アクセスが有効になるまで数分かかることがあります。エラーが続く場合は、一度
+   サインアウトして再度サインインしてみてください。
 
 ご不明点があればお気軽にお知らせください。
+```
+
+If you invited the user as a guest, add a first step before signing in, in plain terms (no "tenant" jargon):
+
+```
+0. まず、お送りした招待メールを開き、リンクから承諾をお願いします。
 ```
 
 ## Notes
