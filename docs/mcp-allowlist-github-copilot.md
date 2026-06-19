@@ -43,11 +43,11 @@ The matrix below reflects the [GitHub Supported surfaces table](https://docs.git
 | Copilot cloud agent |        ❌        |          ❌           |
 
 > [!NOTE]
-> Visual Studio now reports **full enforcement**; an earlier version of this doc (and the 2025-11-18 changelog) listed it as discovery-only. This is exactly the kind of value that shifts during preview, which is why the verification matrix below records the surface and date actually observed.
+> Visual Studio now reports **full enforcement**; an earlier version of this doc (and the 2025-11-18 changelog) listed it as discovery-only. This is exactly the kind of value that shifts during preview, which is why the verification matrix below records the surface and date actually observed. GitHub also lists **VS Code Insiders** separately, and support on some surfaces (Eclipse, JetBrains, Xcode) may require pre-release IDE/plugin builds — confirm against the live table for the exact surface and build you test.
 
 ## Where API Center fits
 
-GitHub documents **Azure API Center as a supported option** for hosting the MCP registry ("a fully managed MCP registry with automatic CORS configuration"). The servers you register in this demo (for example `usecase-coach-mcp`) are exactly the catalog you would point the **MCP Registry URL** at.
+GitHub documents **Azure API Center as a supported option** for hosting the MCP registry ("a fully managed MCP registry with automatic CORS configuration"). The servers you register in this demo (for example `usecase-coach-mcp`) are exactly the catalog you would point the **MCP Registry URL** at. Because Copilot fetches the registry from the browser/editor, the endpoint must return CORS headers on `/v0.1/servers`; **API Center sets these automatically**, so this demo needs no extra work — only a **self-hosted** registry would have to add `Access-Control-Allow-Origin/Methods/Headers` itself.
 
 Two specifics that are easy to get wrong:
 
@@ -90,20 +90,23 @@ The value of this setup is the full path: **(A) discovery** — point Copilot at
 
    > [!CAUTION]
    > This policy **applies to developers immediately** and blocks any non-registry MCP server they have already configured. Test in a non-production organization (or a dedicated test enterprise) before applying it where people are actively working.
-7. Re-test the cases in the matrix below on each surface you care about.
+7. Re-test the cases in the matrix below — **at minimum on VS Code Stable and Copilot CLI** (the two surfaces issues #17/#19 require), plus any other surface you care about.
 
 ### Verification matrix (fill in per surface)
 
-For each surface, record what you observed and the date. **Transport** distinguishes a *remote* MCP server (validated by name/ID against the remote entry) from a *local* server (must be listed with an exactly matching server ID). Expected behavior is from GitHub's docs — confirm it, since preview behavior shifts.
+For each surface, record what you observed, the **surface version**, and the date. **Transport** distinguishes a *remote* MCP server (validated by name/ID against the remote entry) from a *local* server (must be listed with an exactly matching server ID). Expected behavior is from GitHub's docs — confirm it, since preview behavior shifts.
 
-| # | Case | Transport | Expected | Observed (VS Code) | Observed (Copilot CLI) | Date |
-| - | ---- | --------- | -------- | ------------------ | ---------------------- | ---- |
+| # | Case | Transport | Expected | Observed (VS Code Stable) | Observed (Copilot CLI) | Version / Date |
+| - | ---- | --------- | -------- | ------------------------- | ---------------------- | -------------- |
 | 1 | Server present in registry | Remote | **Allow** — connects normally | | | |
 | 2 | Server **not** in registry | Remote | **Block** — fails to connect with a "blocked by policy" message | | | |
-| 3 | Local server **with** matching server ID in registry | Local | **Allow** | | | |
-| 4 | Local server **not** in registry (or ID mismatch) | Local | **Block** | | | |
-| 5 | Local server whose name/ID is edited to match a registry entry | Local | **Bypass risk** — may connect; documents the name/ID-matching limitation | | | |
-| 6 | *Installation* of a non-registry server | Either | **Not blocked yet** — only connection is enforced | | | |
+| 3 | Remote server with the **same name/ID as a registry entry but a different install URL** | Remote | **Confirm** — docs say enforcement is name/ID matching; test whether a mismatched URL is still allowed (potential spoof/bypass) | | | |
+| 4 | Local server **with** matching server ID in registry | Local | **Allow** | | | |
+| 5 | Local server **not** in registry | Local | **Block** | | | |
+| 6 | Local server with **same name but mismatched ID** | Local | **Block** | | | |
+| 7 | Local server whose name/ID is **edited to match** a registry entry (config spoof) | Local | **Bypass risk** — may connect; documents the name/ID-matching limitation | | | |
+| 8 | Local server whose **command/path is changed** while name/ID still matches the registry | Local | **Confirm** — only name/ID is checked, so a swapped command may still connect (bypass risk) | | | |
+| 9 | *Installation* of a non-registry server | Either | **Not blocked yet** — only connection is enforced | | | |
 
 ### Recording results
 
