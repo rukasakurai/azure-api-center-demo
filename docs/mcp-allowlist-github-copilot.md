@@ -59,10 +59,27 @@ Two specifics that are easy to get wrong:
 
    Example shape: `https://contoso-apic.data.eastus.azure-apicenter.ms/workspaces/default`. **Including a suffix like `/v0.1/servers` will cause the registry to error out**, because Copilot appends the MCP v0.1 path automatically.
 
-2. **The registry must be anonymously readable.** GitHub Copilot fetches the registry **without authentication**. By default this demo's API Center data plane is **Entra-protected**: an anonymous request to the data-plane registry returns `401 Unauthorized` (RFC 9728 `WWW-Authenticate: Bearer …`, scope `https://azure-apicenter.net/user_impersonation`). To let Copilot read it, GitHub's documentation instructs you to **enable anonymous access in your API Center's visibility settings** ([Configure an MCP registry → Option 2](https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-mcp-registry)).
+2. **The registry *listing* must be anonymously readable.** GitHub Copilot fetches the registry **without authentication**. By default this demo's API Center data plane is **Entra-protected**: an anonymous request to the data-plane registry returns `401 Unauthorized` (RFC 9728 `WWW-Authenticate: Bearer …`, scope `https://azure-apicenter.net/user_impersonation`). To let Copilot read it, GitHub's documentation instructs you to **enable anonymous access in your API Center's visibility settings** ([Configure an MCP registry → Option 2](https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-mcp-registry)). See [Why anonymous access — what loses Entra, and the limit](#why-anonymous-access--what-loses-entra-and-the-limit) for exactly what this does and does not expose.
 
-   > [!CAUTION]
-   > Enabling anonymous access makes the **server listing world-readable** (the listing is catalog metadata; each MCP server still enforces its own runtime auth). This **conflicts with the tenant-scoped, public-safe defaults** the rest of this demo deliberately follows — the README notes that `allowAnonymousAccess: true` is intentionally *not* used. Treat anonymous access as a deliberate, opt-in step taken only to exercise the GitHub allowlist, and assume all registry metadata may be public.
+### Why anonymous access — what loses Entra, and the limit
+
+Enabling anonymous access means the **registry listing endpoint stops requiring Entra** — you are turning Entra off on that endpoint. This section is explicit about why, exactly what loses Entra, and the limit that follows.
+
+**Why Entra has to be off on the registry endpoint.** Copilot reads the registry **client-side from the editor**, with no way to attach an Entra bearer token. The mandatory CORS headers (`Access-Control-Allow-Origin: *` on `/v0.1/servers`) are the tell: CORS only applies to browser/editor cross-origin requests. Because there is **no documented way to present an Entra token** on that fetch, the endpoint must accept **unauthenticated** reads — i.e. Entra must be disabled on it. There is no "authenticate to the registry with Entra" option today. (Same root cause as issue #8 for the plugin marketplace endpoint.)
+
+**Exactly what loses Entra, and what keeps it** — two independent layers:
+
+| Layer | After enabling anonymous access | Sensitivity |
+| ----- | ------------------------------- | ----------- |
+| Registry **listing endpoint** (`/v0.1/servers`: server names, URLs, descriptions) | **Entra OFF** — unauthenticated reads, readable by anyone with the URL | Catalog **metadata only** |
+| The **MCP servers themselves** (tools + data) | **Entra still ON** — each server enforces its own runtime auth (e.g. App Service Entra auth with VS Code as an allowed client) | The actual sensitive surface |
+
+The management-plane/portal Entra RBAC is also untouched. So what drops Entra is **only the registry listing endpoint** (catalog metadata); the servers and management plane stay Entra-protected.
+
+> [!CAUTION]
+> **The limit / acceptability decision.** This feature *requires* an unauthenticated registry listing endpoint. For many enterprises, exposing **any** unauthenticated endpoint — even one serving only catalog metadata — is unacceptable, and that is a valid position: there is **no supported Entra-authenticated registry option for the GitHub allowlist + API Center today** (a genuine platform gap, sibling of #8). If your org won't allow an anonymous endpoint, the correct decision is to **not** enable anonymous access and track the limitation instead — the feature simply does not fit yet.
+>
+> If you *can* tolerate publishing the catalog metadata and want to test: point the **MCP Registry URL** at a **dedicated workspace** containing only servers whose names/URLs you are comfortable exposing unauthenticated, enable anonymous access there, test, then revert. This keeps the rest of the demo's tenant-scoped, public-safe posture (the README notes `allowAnonymousAccess: true` is intentionally *not* used) intact.
 
 ## End-to-end verification: discovery → enforcement
 
