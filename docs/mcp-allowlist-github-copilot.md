@@ -72,51 +72,9 @@ The management-plane/portal Entra RBAC is also untouched. So what drops Entra is
 
 ## End-to-end verification: discovery → enforcement
 
-> [!WARNING]
-> The **expected** results below come from vendor documentation; the **observed** columns are intentionally blank because they require a live GitHub Business/Enterprise tenant plus the deployed API Center, which are not available in every environment. Fill them in on a connected machine and date each row.
-
 The value of this setup is the full path: **(A) discovery** — point Copilot at the API Center registry and confirm catalogued servers appear — then **(B) enforcement** — turn on *Registry only* and confirm non-registry servers are blocked. Verify both halves; testing them separately is where ambiguity creeps in.
 
-### Step A — Discovery
-
-1. Provision the demo (`azd up`) so at least one MCP server (e.g. `usecase-coach-mcp`) is registered. See the [README](../README.md).
-2. Enable **anonymous access** in your API Center's visibility settings (see the caution above about the trade-off).
-3. Confirm the base workspace URL is now anonymously readable:
-   ```bash
-   curl -sS -o /dev/null -w "%{http_code}\n" \
-     "https://<service>.data.<region>.azure-apicenter.ms/workspaces/<workspace-name>/v0.1/servers"   # expect 200
-   ```
-   (Before enabling anonymous access this returns `401`.)
-4. In GitHub **Settings → AI Controls → MCP**, ensure **MCP servers in Copilot** is *Enabled*, then set **MCP Registry URL** to the **base** workspace URL — `…/workspaces/<workspace-name>`, **without** the `/v0.1/servers` suffix — and **Save**.
-5. In a supported editor signed into a governed seat, confirm the registry's servers are **discoverable** (the catalogued server appears as available).
-
-### Step B — Enforcement
-
-6. Switch **Restrict MCP access to registry servers** to **Registry only**.
-
-   > [!CAUTION]
-   > This policy **applies to developers immediately** and blocks any non-registry MCP server they have already configured. Test in a non-production organization (or a dedicated test enterprise) before applying it where people are actively working.
-7. Re-test the cases in the matrix below — **at minimum on VS Code Stable and Copilot CLI** (the two surfaces issues #17/#19 require), plus any other surface you care about.
-
-### Verification matrix (fill in per surface)
-
-For each surface, record what you observed, the **surface version**, and the date. **Transport** distinguishes a *remote* MCP server (validated by name/ID against the remote entry) from a *local* server (must be listed with an exactly matching server ID). Expected behavior is from GitHub's docs — confirm it, since preview behavior shifts.
-
-| # | Case | Transport | Expected | Observed (VS Code Stable) | Observed (Copilot CLI) | Version / Date |
-| - | ---- | --------- | -------- | ------------------------- | ---------------------- | -------------- |
-| 1 | Server present in registry | Remote | **Allow** — connects normally | | | |
-| 2 | Server **not** in registry | Remote | **Block** — fails to connect with a "blocked by policy" message | | | |
-| 3 | Remote server with the **same name/ID as a registry entry but a different install URL** | Remote | **Confirm** — docs say enforcement is name/ID matching; test whether a mismatched URL is still allowed (potential spoof/bypass) | | | |
-| 4 | Local server **with** matching server ID in registry | Local | **Allow** | | | |
-| 5 | Local server **not** in registry | Local | **Block** | | | |
-| 6 | Local server with **same name but mismatched ID** | Local | **Block** | | | |
-| 7 | Local server whose name/ID is **edited to match** a registry entry (config spoof) | Local | **Bypass risk** — may connect; documents the name/ID-matching limitation | | | |
-| 8 | Local server whose **command/path is changed** while name/ID still matches the registry | Local | **Confirm** — only name/ID is checked, so a swapped command may still connect (bypass risk) | | | |
-| 9 | *Installation* of a non-registry server | Either | **Not blocked yet** — only connection is enforced | | | |
-
-### Recording results
-
-When the observed columns are filled in, summarize for each tested surface: (1) which cases enforced as expected, (2) any deviation from the documented behavior, and (3) the surface version and date. That summary is the deliverable that lets the related issues be closed — it states *observed* allow/block behavior by surface and transport, including known limitations and bypass risks, rather than restating the docs.
+For exact, reproducible steps — provisioning a dedicated anonymous test environment, isolating the test identity, and the per-surface verification matrix to record observed results — see the **[testing runbook](mcp-allowlist-testing-runbook.md)**.
 
 ## Sources
 
