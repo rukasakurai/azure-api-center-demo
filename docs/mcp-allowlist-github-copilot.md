@@ -8,42 +8,25 @@ How to use the API Center registry provisioned by this demo as the **MCP registr
 > [!IMPORTANT]
 > **Preview status (as of 2026-06-19).** Several pieces below are in **public preview** and subject to change:
 > - GitHub's **MCP Registry URL** and **allowlist** policy are explicitly **public preview and subject to change** ([GitHub docs](https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-mcp-server-access)). They are available for **Copilot Business and Copilot Enterprise**.
-> - Allowlist **enforcement** has expanded since the original [changelog, 2025-11-18](https://github.blog/changelog/2025-11-18-internal-mcp-registry-and-allowlist-controls-for-vs-code-stable-in-public-preview/). Always check the live [Supported surfaces table](https://docs.github.com/en/copilot/concepts/mcp-management#supported-surfaces) for the current matrix — see [Supported surfaces](#supported-surfaces) below for the values current as of this date.
+> - Allowlist **enforcement** has expanded since the original [changelog, 2025-11-18](https://github.blog/changelog/2025-11-18-internal-mcp-registry-and-allowlist-controls-for-vs-code-stable-in-public-preview/). Always check the live [Supported surfaces table](https://docs.github.com/en/copilot/concepts/mcp-management#supported-surfaces) for the current matrix.
 > - Azure API Center's partner-MCP **Discover → MCP** experience is labelled **(preview)** in the Azure portal.
 > - The underlying [MCP registry API](https://github.com/modelcontextprotocol/registry) is at **v0.1** (an API freeze ahead of a future v1 GA), i.e. pre-GA.
 
 ## How the GitHub feature works
 
-GitHub Copilot exposes MCP policy under **Settings → AI Controls → MCP** (at the enterprise or organization level):
+GitHub Copilot exposes MCP policy under **AI Controls → MCP** (at the Enterprise level):
 
-- **MCP servers in Copilot** — turn MCP on/off for seat holders.
+- **MCP servers in Copilot** — at the **enterprise** level this is a three-way policy: **Let organizations decide** (default — each org sets its own policy), **Enabled everywhere** (cannot be disabled at the org level), or **Disabled everywhere** (cannot be enabled at the org level). The actual on/off enable for seat holders is the **organization**-level *MCP servers in Copilot* setting (under Org → Settings → Copilot → Policies).
 - **MCP Registry URL** — the URL of a [specification-compliant MCP registry](https://github.com/modelcontextprotocol/registry). Servers listed there become discoverable to members in supported editors.
 - **Restrict MCP access to registry servers** — choose **Allow all** (registry servers are recommendations; any server may run) or **Registry only** (only servers in the registry may run; all others are blocked). The chosen policy applies to developers **immediately**.
 
 Key properties of the enforcement ([GitHub: MCP allowlist enforcement](https://docs.github.com/en/copilot/reference/mcp-allowlist-enforcement)):
 
 - **Runtime, client-side, at server-connect time.** With *Registry only*, the Copilot integration in each supported surface blocks, **at runtime**, any server not in the registry — evaluated when a server is loaded/connected, not on every tool call (so no per-call latency). A previously-configured, non-allowed server stops connecting once the policy is set.
-- **Supported surfaces only.** See [Supported surfaces](#supported-surfaces) below. Enforcement applies to supported IDEs and Copilot CLI — **not** the Copilot cloud agent, and nothing outside Copilot (a standalone MCP client is unaffected).
+- **Supported surfaces only.** Enforcement runs per supported Copilot surface and shifts during preview — as of 2026-06-19 the Copilot cloud agent is **not** covered; check the live [Supported surfaces table](https://docs.github.com/en/copilot/concepts/mcp-management#supported-surfaces) for the current matrix.
 - **Name/ID matching, which is bypassable.** As of this date GitHub documents two enforcement limitations: enforcement is **based only on server name/ID matching, which can be bypassed by editing configuration files**, and **strict enforcement that prevents *installation* of non-registry servers is not yet available**. For the highest security GitHub suggests disabling MCP servers in Copilot until strict enforcement ships.
 - **Local servers.** With *Registry only*, a local server must be listed in the registry with the **correct server ID, exactly matching the installed server ID** (a server's canonical ID is usually in its documentation or manifest).
 - **Multiple seats → one resolved policy.** When a user holds seats in more than one org/enterprise, GitHub resolves to a single active policy: **enterprise scope overrides org**, then **`Registry only` beats `Allow all`**, then the **most recently uploaded registry** wins.
-
-## Supported surfaces
-
-The matrix below reflects the [GitHub Supported surfaces table](https://docs.github.com/en/copilot/concepts/mcp-management#supported-surfaces) **as of 2026-06-19**. It changes as the preview expands — re-check the live table before relying on it.
-
-| Surface             | Registry display | Allowlist enforcement |
-| ------------------- | :--------------: | :-------------------: |
-| Copilot CLI         |        ✅        |          ✅           |
-| VS Code             |        ✅        |          ✅           |
-| Visual Studio       |        ✅        |          ✅           |
-| JetBrains IDEs      |        ✅        |          ✅           |
-| Eclipse             |        ✅        |          ✅           |
-| Xcode               |        ✅        |          ✅           |
-| Copilot cloud agent |        ❌        |          ❌           |
-
-> [!NOTE]
-> Visual Studio now reports **full enforcement**; an earlier version of this doc (and the 2025-11-18 changelog) listed it as discovery-only. This is exactly the kind of value that shifts during preview, which is why the verification matrix below records the surface and date actually observed. GitHub also lists **VS Code Insiders** separately, and support on some surfaces (Eclipse, JetBrains, Xcode) may require pre-release IDE/plugin builds — confirm against the live table for the exact surface and build you test.
 
 ## Where API Center fits
 
