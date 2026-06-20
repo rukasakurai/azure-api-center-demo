@@ -89,17 +89,17 @@ In the isolated editor signed into the test enterprise, confirm the registry's s
 
 For each surface, record what you observed, the **surface version**, and the date. **Transport**: a *remote* server is validated by name/ID against the remote entry; a *local* server must be listed with an exactly matching server ID. Expected behavior is from GitHub's docs — confirm it, since preview behavior shifts.
 
-| # | Case | Transport | Expected | Observed (VS Code Stable) | Observed (Copilot CLI) | Version / Date |
+| # | Case | Transport | Expected | Observed (VS Code) | Observed (Copilot CLI) | Version / Date |
 | - | ---- | --------- | -------- | ------------------------- | ---------------------- | -------------- |
-| 1 | Server present in registry | Remote | **Allow** — connects normally | | | |
-| 2 | Server **not** in registry | Remote | **Block** — fails to connect with a "blocked by policy" message | | | |
-| 3 | Remote server with the **same name/ID as a registry entry but a different install URL** | Remote | **Confirm** — enforcement is name/ID matching; test whether a mismatched URL is still allowed (spoof/bypass) | | | |
-| 4 | Local server **with** matching server ID in registry | Local | **Allow** | | | |
-| 5 | Local server **not** in registry | Local | **Block** | | | |
-| 6 | Local server with **same name but mismatched ID** | Local | **Block** | | | |
-| 7 | Local server whose name/ID is **edited to match** a registry entry (config spoof) | Local | **Bypass risk** — may connect; documents the name/ID-matching limitation | | | |
-| 8 | Local server whose **command/path is changed** while name/ID still matches the registry | Local | **Confirm** — only name/ID is checked, so a swapped command may still connect (bypass risk) | | | |
-| 9 | *Installation* of a non-registry server | Either | **Not blocked yet** — only connection is enforced | | | |
+| 1 | Server present in registry | Remote | **Allow** — connects normally | Worked (as expected) | Worked (as expected) | 2026-06-20 |
+| 2 | Server **not** in registry | Remote | **Block** | Failed (as expected) with 405 | Worked (contrary to expectation) | 2026-06-20 |
+| 3 | Remote server with the **same name/ID as a registry entry but a different install URL** | Remote | **Confirm** — enforcement is name/ID matching; test whether a mismatched URL is still allowed (spoof/bypass) | - | - | - |
+| 4 | Local server **with** matching server ID in registry | Local | **Allow** | - | - | - |
+| 5 | Local server **not** in registry | Local | **Block** | - | - | - |
+| 6 | Local server with **same name but mismatched ID** | Local | **Block** | - | - | - |
+| 7 | Local server whose name/ID is **edited to match** a registry entry (config spoof) | Local | **Bypass risk** — may connect; documents the name/ID-matching limitation | - | - | - |
+| 8 | Local server whose **command/path is changed** while name/ID still matches the registry | Local | **Confirm** — only name/ID is checked, so a swapped command may still connect (bypass risk) | - | - | - |
+| 9 | *Installation* of a non-registry server | Either | **Not blocked yet** — only connection is enforced | - | - | - |
 
 ### Recording results
 
