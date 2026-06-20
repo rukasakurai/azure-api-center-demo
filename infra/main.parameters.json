@@ -11,6 +11,9 @@
     "portalEntraClientId": {
       "value": "${PORTAL_ENTRA_CLIENT_ID}"
     },
+    "portalAllowAnonymousAccess": {
+      "value": "${PORTAL_ALLOW_ANONYMOUS_ACCESS=false}"
+    },
     "agentSkillsRepositoryUrl": {
       "value": "${AGENT_SKILLS_REPOSITORY_URL}"
     }

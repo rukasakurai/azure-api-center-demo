@@ -38,6 +38,9 @@ param portalEntraClientId string = ''
 @description('Microsoft Entra tenant ID for portal sign-in. Defaults to the deployment tenant so only members of your tenant can sign in.')
 param portalEntraTenantId string = tenant().tenantId
 
+@description('Allow anonymous (unauthenticated) access to the API Center portal/registry visibility. Keep false for Entra-protected ("production") environments. Set true ONLY for a dedicated environment used to test the GitHub Copilot MCP allowlist, whose registry fetch cannot present an Entra token. Set it with "azd env set PORTAL_ALLOW_ANONYMOUS_ACCESS true".')
+param portalAllowAnonymousAccess bool = false
+
 var configurePortal = !empty(portalEntraClientId)
 
 @description('GitHub repository (tree URL) whose Agent Skills are automatically synchronized into the API Center inventory. Leave empty to use the default public rukasakurai/agent-skills repo. Each skill is discovered by the "**/SKILL.md" file pattern per the Agent Skills specification (https://agentskills.io); the rest of the standard skill files and folders belong to that skill. Because this repository is public, only a public repository URL belongs here. Set it with "azd env set AGENT_SKILLS_REPOSITORY_URL <url>".')
@@ -232,7 +235,7 @@ resource portal 'Microsoft.ApiCenter/services/portals@2024-06-01-preview' = if (
   properties: {
     title: apiCenter.name
     enabled: true
-    allowAnonymousAccess: false
+    allowAnonymousAccess: portalAllowAnonymousAccess
     authentication: {
       clientId: portalEntraClientId
       tenantId: portalEntraTenantId
