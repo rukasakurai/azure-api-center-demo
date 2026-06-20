@@ -101,9 +101,7 @@ For each surface, record what you observed, the **surface version**, and the dat
 | 8 | Local server whose **command/path is changed** while name/ID still matches the registry | Local | **Confirm** — only name/ID is checked, so a swapped command may still connect (bypass risk) | - | - | - |
 | 9 | *Installation* of a non-registry server | Either | **Not blocked yet** — only connection is enforced | - | - | - |
 
-### Recording results
-
-For each tested surface, summarize: (1) which cases enforced as expected, (2) any deviation from documented behavior, and (3) the surface version and date. That observed summary — by surface and transport, including limitations and bypass risks — is what lets issues [#17](https://github.com/rukasakurai/azure-api-center-demo/issues/17) and [#19](https://github.com/rukasakurai/azure-api-center-demo/issues/19) be closed.
+Cases 3–9 are untested and deferred while the feature is in preview. Case 2's Copilot CLI result is a real deviation (enforcement didn't block an unregistered server), but might be an issue with how the testing was performed rather than a product issue.
 
 ## Step 7 — Clean up
 

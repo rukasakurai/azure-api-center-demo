@@ -3,7 +3,7 @@
 How to use the API Center registry provisioned by this demo as the **MCP registry** behind GitHub Copilot's *MCP server allowlist*, so that Copilot users in an organization or enterprise can be restricted to the MCP servers catalogued here.
 
 > [!WARNING]
-> **Untested draft.** The steps below were assembled from vendor documentation (see [Sources](#sources)) and have **not been executed end-to-end** against a live GitHub enterprise + API Center at the time of writing. Treat this as a directional guide, not a verified runbook. Validate each step against the current documentation before relying on it.
+> **Partially verified (2026-06-20).** Discovery and the primary remote enforcement cases (registered → allow, unregistered → block) were tested against a live GitHub enterprise + API Center; see the [testing runbook](mcp-allowlist-testing-runbook.md). Local-server and spoofing cases are still unverified. These GitHub features are in public preview — validate against current docs before relying on them.
 
 > [!IMPORTANT]
 > **Preview status (as of 2026-06-19).** Several pieces below are in **public preview** and subject to change:
