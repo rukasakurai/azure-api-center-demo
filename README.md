@@ -104,7 +104,7 @@ The portal is the `Microsoft.ApiCenter/services/portals` resource (`infra/main.b
    azd up                              # publishes the Entra-protected portal
    ```
 
-   The script reads the portal hostname from the deployment, registers (or reuses) an app with the correct single-page-application redirect URI, and sets `PORTAL_ENTRA_CLIENT_ID` in your azd environment. You can also bring your own app and set it directly:
+   The script reads the portal hostname from the deployment, registers (or reuses) a portal-specific app with the correct single-page-application redirect URI, and sets `PORTAL_ENTRA_CLIENT_ID` in your azd environment. Its default display name includes the API Center service name so it cannot accidentally reuse an unrelated tenant-wide app with a generic name. You can also bring your own app and set it directly:
 
    ```bash
    azd env set PORTAL_ENTRA_CLIENT_ID <app-client-id>
@@ -144,6 +144,33 @@ azd up
 1. Create/select an azd environment
 2. Provision infrastructure from `infra/main.bicep`
 3. Output the API Center resource details
+
+### Manual deployment from GitHub
+
+The **Deploy Demo** workflow provides an on-demand deployment path backed by
+the environment-scoped configuration in the `demo` GitHub Environment. It runs only through
+`workflow_dispatch`; pushing a commit does not deploy anything.
+
+Configure these environment-scoped settings:
+
+| Name | Type |
+|---|---|
+| `AZD_ENVIRONMENT` | Variable |
+| `AZURE_CLIENT_ID` | Variable |
+| `AZURE_LOCATION` | Variable |
+| `AZURE_RESOURCE_GROUP` | Variable |
+| `PORTAL_ALLOW_ANONYMOUS_ACCESS` | Variable |
+| `PORTAL_ENTRA_CLIENT_ID` | Variable |
+| `AZURE_SUBSCRIPTION_ID` | Secret |
+| `AZURE_TENANT_ID` | Secret |
+| `CATALOG_READERS_PRINCIPAL_ID` | Secret |
+| `USECASE_COACH_MCP_ENDPOINT` | Secret |
+
+The OIDC application needs a federated credential scoped to
+`environment:demo`. Grant its service principal `Contributor` plus the
+permission required to manage role assignments at the persistent resource
+group scope. The workflow intentionally does not create or delete that
+resource group.
 
 ## Customize the demo
 

@@ -9,7 +9,7 @@ This guide provides step-by-step instructions for configuring Azure OpenID Conne
 - [Step 1: Create Microsoft Entra ID (Azure AD) App Registration](#step-1-create-microsoft-entra-id-azure-ad-app-registration)
 - [Step 2: Configure Federated Credentials](#step-2-configure-federated-credentials)
 - [Step 3: Assign Azure Permissions](#step-3-assign-azure-permissions)
-- [Step 4: Configure GitHub Repository Variables and Secrets](#step-4-configure-github-repository-variables-and-secrets)
+- [Step 4: Configure the `demo` GitHub Environment](#step-4-configure-the-demo-github-environment)
 - [Step 5: Verify Configuration](#step-5-verify-configuration)
 - [Troubleshooting](#troubleshooting)
 - [Additional Resources](#additional-resources)
@@ -99,6 +99,7 @@ Federated credentials establish the trust relationship between GitHub and Azure.
    export APP_ID="<your-app-id>"
    export GITHUB_ORG="<your-github-org>"
    export GITHUB_REPO="<your-repo-name>"
+   export GITHUB_ENVIRONMENT="demo"
    ```
 
    PowerShell:
@@ -106,179 +107,98 @@ Federated credentials establish the trust relationship between GitHub and Azure.
    $env:APP_ID = "<your-app-id>"
    $env:GITHUB_ORG = "<your-github-org>"
    $env:GITHUB_REPO = "<your-repo-name>"
+   $env:GITHUB_ENVIRONMENT = "demo"
    ```
 
-2. **Create a federated credential** for the main branch:
+2. **Create a federated credential** for the `demo` GitHub Environment:
    ```bash
-    # Azure CLI expects the *application object id* for federated-credential operations.
-    # (The app's client id is $APP_ID; the object id is a different GUID.)
-    APP_OBJECT_ID=$(az ad app show --id "$APP_ID" --query id -o tsv)
+   # Azure CLI expects the application object ID, not the client ID.
+   APP_OBJECT_ID=$(az ad app show --id "$APP_ID" --query id -o tsv)
 
    az ad app federated-credential create \
-          --id "$APP_OBJECT_ID" \
+     --id "$APP_OBJECT_ID" \
      --parameters '{
-       "name": "github-federated-credential",
+       "name": "github-environment-demo",
        "issuer": "https://token.actions.githubusercontent.com",
-       "subject": "repo:'"$GITHUB_ORG"'/'"$GITHUB_REPO"':ref:refs/heads/main",
+       "subject": "repo:'"$GITHUB_ORG"'/'"$GITHUB_REPO"':environment:'"$GITHUB_ENVIRONMENT"'",
        "audiences": ["api://AzureADTokenExchange"]
      }'
    ```
 
    PowerShell:
    ```powershell
-   # Azure CLI expects the *application object id* for federated-credential operations.
-   # (The app's client id is $env:APP_ID; the object id is a different GUID.)
+   # Azure CLI expects the application object ID, not the client ID.
    $env:APP_OBJECT_ID = (az ad app show --id $env:APP_ID --query id -o tsv)
 
-   $subject = "repo:$env:GITHUB_ORG/$env:GITHUB_REPO:ref:refs/heads/main"
+   $subject = "repo:$($env:GITHUB_ORG)/$($env:GITHUB_REPO):environment:$($env:GITHUB_ENVIRONMENT)"
    $payload = @{
-      name      = "github-federated-credential"
+      name      = "github-environment-demo"
       issuer    = "https://token.actions.githubusercontent.com"
       subject   = $subject
       audiences = @("api://AzureADTokenExchange")
    } | ConvertTo-Json -Depth 4
 
-   az ad app federated-credential create --id $env:APP_OBJECT_ID --parameters $payload
+   $jsonPath = Join-Path $env:TEMP "github-environment-demo.json"
+   $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+   try {
+     [System.IO.File]::WriteAllText($jsonPath, $payload, $utf8WithoutBom)
+     az ad app federated-credential create `
+        --id $env:APP_OBJECT_ID `
+        --parameters $jsonPath
+   }
+   finally {
+     Remove-Item -Path $jsonPath -Force -ErrorAction SilentlyContinue
+   }
    ```
 
-      > Note: If PowerShell JSON quoting causes errors, write `$payload` to a temp file and pass the file path:
-      > ```powershell
-      > $jsonPath = Join-Path $env:TEMP 'federated-credential.json'
-      > $payload | Set-Content -Path $jsonPath -Encoding utf8
-      > az ad app federated-credential create --id $env:APP_OBJECT_ID --parameters $jsonPath
-      > Remove-Item -Path $jsonPath
-      > ```
+3. **Restrict the `demo` Environment to `main`.** In repository settings, open
+   **Environments** → **demo** → **Deployment branches and tags**, choose
+   **Selected branches and tags**, and add `main`.
 
-3. **(Optional) Add federated credentials for other branches or environments**:
-   
-   For pull requests:
-   ```bash
-    APP_OBJECT_ID=$(az ad app show --id "$APP_ID" --query id -o tsv)
-
-   az ad app federated-credential create \
-       --id "$APP_OBJECT_ID" \
-     --parameters '{
-       "name": "github-pr-credential",
-       "issuer": "https://token.actions.githubusercontent.com",
-       "subject": "repo:'"$GITHUB_ORG"'/'"$GITHUB_REPO"':pull_request",
-       "audiences": ["api://AzureADTokenExchange"]
-     }'
-   ```
-
-    PowerShell:
-    ```powershell
-    $subject = "repo:$env:GITHUB_ORG/$env:GITHUB_REPO:pull_request"
-    $payload = @{
-       name      = "github-pr-credential"
-       issuer    = "https://token.actions.githubusercontent.com"
-       subject   = $subject
-       audiences = @("api://AzureADTokenExchange")
-    } | ConvertTo-Json -Depth 4
-
-      az ad app federated-credential create --id $env:APP_OBJECT_ID --parameters $payload
-    ```
-
-   For specific environments:
-   ```bash
-    APP_OBJECT_ID=$(az ad app show --id "$APP_ID" --query id -o tsv)
-
-   az ad app federated-credential create \
-       --id "$APP_OBJECT_ID" \
-     --parameters '{
-       "name": "github-env-credential",
-       "issuer": "https://token.actions.githubusercontent.com",
-       "subject": "repo:'"$GITHUB_ORG"'/'"$GITHUB_REPO"':environment:production",
-       "audiences": ["api://AzureADTokenExchange"]
-     }'
-   ```
-
-    PowerShell:
-    ```powershell
-    $subject = "repo:$env:GITHUB_ORG/$env:GITHUB_REPO:environment:production"
-    $payload = @{
-       name      = "github-env-credential"
-       issuer    = "https://token.actions.githubusercontent.com"
-       subject   = $subject
-       audiences = @("api://AzureADTokenExchange")
-    } | ConvertTo-Json -Depth 4
-
-      az ad app federated-credential create --id $env:APP_OBJECT_ID --parameters $payload
-    ```
+   The deployment workflows also reject any ref other than `main`. Do not add
+   branch- or pull-request-scoped credentials to this deployment identity;
+   doing so would bypass the Environment boundary.
 
 ## Step 3: Assign Azure Permissions
 
-The service principal needs appropriate permissions to access Azure resources.
+The service principal needs permission to deploy resources and create the
+catalog-reader role assignment. Scope both roles to the persistent resource
+group rather than the subscription:
 
-1. **Assign a role to the service principal**:
-   
-   First, set your subscription ID as a variable (if not already set):
-   ```bash
-   export SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-   ```
+```bash
+export SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+export RESOURCE_GROUP="<persistent-resource-group>"
+export SP_OBJECT_ID=$(az ad sp show --id "$APP_ID" --query id -o tsv)
+SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
 
-   PowerShell:
-   ```powershell
-   $env:SUBSCRIPTION_ID = (az account show --query id -o tsv)
-   ```
-   
-   For read-only access:
-   
-    First, capture the service principal **object id** (recommended for role assignments):
-    ```bash
-    export SP_OBJECT_ID=$(az ad sp show --id $APP_ID --query id -o tsv)
-    ```
+az role assignment create \
+  --assignee-object-id "$SP_OBJECT_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role Contributor \
+  --scope "$SCOPE"
 
-    PowerShell:
-    ```powershell
-    $env:SP_OBJECT_ID = (az ad sp show --id $env:APP_ID --query id -o tsv)
-    ```
+az role assignment create \
+  --assignee-object-id "$SP_OBJECT_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Role Based Access Control Administrator" \
+  --scope "$SCOPE"
+```
 
-   ```bash
-   az role assignment create \
-       --assignee-object-id $SP_OBJECT_ID \
-       --assignee-principal-type ServicePrincipal \
-     --role Reader \
-     --scope /subscriptions/$SUBSCRIPTION_ID
-   ```
+The workflow intentionally does not create or delete the resource group. If
+the group is deleted, an administrator must restore it and these assignments
+before GitHub can deploy again.
 
-    PowerShell:
-    ```powershell
-    az role assignment create `
-       --assignee-object-id $env:SP_OBJECT_ID `
-       --assignee-principal-type ServicePrincipal `
-       --role Reader `
-       --scope "/subscriptions/$env:SUBSCRIPTION_ID"
-    ```
+Verify both assignments:
 
-   For contributor access (allows resource creation/modification):
-   ```bash
-   az role assignment create \
-       --assignee-object-id $SP_OBJECT_ID \
-       --assignee-principal-type ServicePrincipal \
-     --role Contributor \
-     --scope /subscriptions/$SUBSCRIPTION_ID
-   ```
+```bash
+az role assignment list \
+  --assignee-object-id "$SP_OBJECT_ID" \
+  --scope "$SCOPE" \
+  --query "[].{role:roleDefinitionName,scope:scope}" \
+  --output table
+```
 
-    PowerShell:
-    ```powershell
-    az role assignment create `
-       --assignee-object-id $env:SP_OBJECT_ID `
-       --assignee-principal-type ServicePrincipal `
-       --role Contributor `
-       --scope "/subscriptions/$env:SUBSCRIPTION_ID"
-    ```
-
-2. **Verify role assignment**:
-   ```bash
-   az role assignment list --assignee-object-id $SP_OBJECT_ID --output table
-   ```
-
-   PowerShell:
-   ```powershell
-   az role assignment list --assignee-object-id $env:SP_OBJECT_ID --output table
-   ```
-
-## Step 4: Configure GitHub Repository Variables and Secrets
+## Step 4: Configure the `demo` GitHub Environment
 
 These values are **identifiers**, not credentials:
 - `AZURE_CLIENT_ID` (app/client ID), `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` are not passwords or tokens.
@@ -287,29 +207,32 @@ These values are **identifiers**, not credentials:
 
 That said, you may still choose to store any or all of them as GitHub **secrets** for defense-in-depth (for example, to reduce accidental exposure of environment metadata in logs or screenshots).
 
-This repository’s workflow is set up to use:
-- `AZURE_CLIENT_ID` as a GitHub Actions **repository variable** (non-secret)
-- `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` as GitHub Actions **repository secrets**
+This repository's workflows use settings scoped to the `demo` GitHub
+Environment:
+- `AZURE_CLIENT_ID` as an environment **variable** (non-secret)
+- `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` as environment **secrets**
+- `AZURE_RESOURCE_GROUP` as an environment **variable**
 
 1. **Navigate to GitHub Repository Settings**:
    - Go to your repository on GitHub
-   - Click **Settings** → **Secrets and variables** → **Actions**
+   - Click **Settings** → **Environments** → **demo**
 
-2. **Add the following repository variable / secrets**:
+2. **Add the following environment variables and secrets**:
 
    | Name | Type | Description | How to Get |
    |------|------|-------------|------------|
    | `AZURE_CLIENT_ID` | Variable | Application (client) ID | From Step 1, or print `APP_ID` |
    | `AZURE_TENANT_ID` | Secret | Microsoft Entra tenant ID | From Step 1, or run `az account show --query tenantId -o tsv` |
    | `AZURE_SUBSCRIPTION_ID` | Secret | Azure Subscription ID | From Step 1, or run `az account show --query id -o tsv` |
+   | `AZURE_RESOURCE_GROUP` | Variable | Persistent target resource group | Chosen in Step 3 |
 
-3. **Create the variable + secrets**:
-   - For `AZURE_CLIENT_ID`: click **Variables** → **New repository variable**
-   - For `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`: click **Secrets** → **New repository secret**
+3. Add `AZURE_CLIENT_ID` and `AZURE_RESOURCE_GROUP` under **Environment
+   variables**, and add `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` under
+   **Environment secrets**.
 
-> ⚠️ **Important**: These values are identifiers (not credentials), but you should still avoid committing environment-specific IDs to your repository. Store them in GitHub Actions variables/secrets to keep the repo reusable and to avoid leaking tenant/subscription metadata.
-
-> Optional: If you prefer storing `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` as **variables** instead of secrets, update the workflow to use `vars.AZURE_TENANT_ID` and `vars.AZURE_SUBSCRIPTION_ID` (and update the “required repo config” checks accordingly).
+> These values are identifiers rather than credentials, but none should be
+> committed to this public repository. See the README for the remaining
+> deployment-specific `demo` settings.
 
 ## Step 5: Verify Configuration
 
@@ -319,16 +242,17 @@ This repository includes a workflow to validate your Azure OIDC configuration.
 
 2. **Select "Azure OIDC Connectivity Check"** from the workflows list
 
-3. **Click "Run workflow"** → **Run workflow** (on your desired branch)
+3. Select `main`, then click **Run workflow**. Other branches are intentionally
+   blocked from the `demo` Environment.
 
 4. **Monitor the workflow run**:
    - ✅ If successful, your Azure OIDC is configured correctly
    - ❌ If it fails, check the [Troubleshooting](#troubleshooting) section below
 
 The workflow performs the following checks:
-- Verifies required GitHub Actions variables/secrets are configured
+- Verifies required `demo` Environment variables/secrets are configured
 - Attempts to authenticate with Azure using OIDC
-- Runs `az account show` to confirm connectivity
+- Confirms access to the persistent resource group
 
 ## Troubleshooting
 
@@ -339,19 +263,20 @@ The workflow performs the following checks:
 **Solution**:
 - Verify the subject in your federated credential matches your repository structure:
   ```
-  repo:OWNER/REPO:ref:refs/heads/BRANCH
+  repo:OWNER/REPO:environment:demo
   ```
-- Ensure you're running the workflow from the branch specified in the credential
+- Ensure the workflow job declares `environment: demo`
 - Check for typos in organization or repository name
 
-### Error: "AZURE_CLIENT_ID repository variable is not configured"
+### Error: "AZURE_CLIENT_ID is not configured in the demo GitHub Environment"
 
 **Cause**: Required GitHub Actions variable is missing.
 
 **Solution**:
-- Go to Repository Settings → Secrets and variables → Actions
+- Go to **Settings** → **Environments** → **demo**
 - Verify the variable exists: `AZURE_CLIENT_ID`
-- Verify the secrets exist: `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
+- Verify the variable exists: `AZURE_RESOURCE_GROUP`
+- Verify the secrets exist: `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`
 - Ensure names match exactly (case-sensitive)
 
 ### Error: "Authorization failed"
@@ -360,7 +285,8 @@ The workflow performs the following checks:
 
 **Solution**:
 - Verify role assignments: `az role assignment list --assignee-object-id $SP_OBJECT_ID`
-- Ensure the service principal has at least Reader role on the subscription
+- Verify `Contributor` and `Role Based Access Control Administrator` at the
+  persistent resource-group scope
 - Wait a few minutes after creating role assignments (propagation delay)
 
 ### Error: "Subscription not found"
@@ -370,7 +296,8 @@ The workflow performs the following checks:
 **Solution**:
 - Verify subscription ID: `az account show --query id -o tsv`
 - Check if the subscription is active: `az account list -o table`
-- Ensure the service principal has been assigned a role in the subscription
+- Ensure the service principal has the required roles on the persistent
+  resource group
 
 ### Workflow succeeds but Azure CLI commands fail
 
@@ -404,4 +331,3 @@ The workflow performs the following checks:
 - Shell: PowerShell 7.5.4 (Core)
 - Tester: Automated Documentation Tester (with human intervention)
 - Notes: Completed Entra app + service principal creation, federated credential creation (required using application object id in `az ad app federated-credential`), Reader RBAC assignment, and successfully ran the "Azure OIDC Connectivity Check" workflow. Human steps: authenticated `az login`, configured GitHub Actions variable/secret values in the repo settings UI, and clicked "Run workflow".
-

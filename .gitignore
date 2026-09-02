@@ -1,3 +1,5 @@
 # Local scratch files created during doc testing / CLI usage
 federated-credential.json
 
+# Azure Developer CLI environments contain deployment-specific identifiers.
+.azure/

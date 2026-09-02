@@ -15,7 +15,7 @@
 #
 set -euo pipefail
 
-APP_NAME="${1:-api-center-portal}"
+APP_NAME="${1:-}"
 
 # azd stores Bicep outputs under their literal output name, so this is
 # 'portalHostname' (camelCase), not PORTAL_HOSTNAME.
@@ -30,14 +30,37 @@ fi
 REDIRECT_URI="https://${HOST}/"
 REDIRECT_URI_BARE="https://${HOST}"
 
+if [ -z "${APP_NAME}" ]; then
+  SERVICE_NAME="${HOST%%.*}"
+  APP_NAME="api-center-portal-${SERVICE_NAME}"
+fi
+
 echo "Portal redirect URI : ${REDIRECT_URI}"
 echo "App display name    : ${APP_NAME}"
 
-APP_ID="$(az ad app list --display-name "${APP_NAME}" --query "[0].appId" -o tsv 2>/dev/null | tr -d '\r' || true)"
+APP_CREATED="false"
+APP_ID="$(az ad app list \
+  --display-name "${APP_NAME}" \
+  --query "[?contains(to_string(spa.redirectUris), '${REDIRECT_URI}') || contains(to_string(spa.redirectUris), '${REDIRECT_URI_BARE}')].appId | [0]" \
+  -o tsv 2>/dev/null | tr -d '\r' || true)"
 if [ -z "${APP_ID}" ]; then
-  echo "Creating app registration..."
-  APP_ID="$(az ad app create --display-name "${APP_NAME}" --query appId -o tsv | tr -d '\r')"
-else
+  APP_COUNT="$(az ad app list --display-name "${APP_NAME}" --query "length(@)" -o tsv | tr -d '\r')"
+  if [ "${APP_COUNT}" = "1" ]; then
+    APP_ID="$(az ad app list --display-name "${APP_NAME}" --query "[0].appId" -o tsv | tr -d '\r')"
+  elif [ "${APP_COUNT}" -gt 1 ]; then
+    echo "ERROR: multiple app registrations named '${APP_NAME}' exist, but none use this portal redirect URI. Use a unique app name or remove the duplicates." >&2
+    exit 1
+  else
+    echo "Creating app registration..."
+    APP_ID="$(az ad app create --display-name "${APP_NAME}" --query appId -o tsv | tr -d '\r')"
+    APP_CREATED="true"
+  fi
+fi
+
+if [ -z "${APP_ID}" ]; then
+  echo "ERROR: failed to create or resolve the app registration." >&2
+  exit 1
+elif [ "${APP_CREATED}" != "true" ]; then
   echo "Reusing existing app registration ${APP_ID}"
 fi
 
