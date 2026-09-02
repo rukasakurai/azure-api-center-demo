@@ -15,7 +15,7 @@ azd up                         # first provision (creates the API Center; portal
 azd up                         # publishes the portal using the new client ID
 #>
 param(
-    [string]$AppName = "api-center-portal"
+    [string]$AppName = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,13 +33,47 @@ if ([string]::IsNullOrWhiteSpace($host_) -or $host_ -eq "null") {
 $redirectUri = "https://$host_/"
 $redirectUriBare = "https://$host_"
 
+if ([string]::IsNullOrWhiteSpace($AppName)) {
+    $serviceName = $host_.Split('.')[0]
+    $AppName = "api-center-portal-$serviceName"
+}
+
 Write-Host "Portal redirect URI : $redirectUri"
 Write-Host "App display name    : $AppName"
 
-$appId = (az ad app list --display-name $AppName --query "[0].appId" -o tsv)
+$apps = @(az ad app list --display-name $AppName -o json | ConvertFrom-Json)
+$matchingApps = @(
+    $apps | Where-Object {
+        $_.spa.redirectUris -contains $redirectUri -or
+        $_.spa.redirectUris -contains $redirectUriBare
+    }
+)
+if ($matchingApps.Count -gt 1) {
+    Write-Error "Multiple app registrations named '$AppName' already use this portal redirect URI. Resolve the duplicate registrations before continuing."
+    exit 1
+}
+
+$appId = if ($matchingApps.Count -eq 1) {
+    $matchingApps[0].appId
+}
+elseif ($apps.Count -eq 1) {
+    $apps[0].appId
+}
+elseif ($apps.Count -gt 1) {
+    Write-Error "Multiple app registrations named '$AppName' exist, but none use this portal redirect URI. Use a unique app name or remove the duplicates."
+    exit 1
+}
+else {
+    $null
+}
+
 if ([string]::IsNullOrWhiteSpace($appId)) {
     Write-Host "Creating app registration..."
     $appId = (az ad app create --display-name $AppName --query appId -o tsv)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($appId)) {
+        Write-Error "Failed to create the app registration."
+        exit 1
+    }
 }
 else {
     Write-Host "Reusing existing app registration $appId"
@@ -60,17 +94,38 @@ if ([string]::IsNullOrWhiteSpace($objId)) {
 
 # Ensure the single-page-application redirect URI is set (API Center portal is a SPA).
 $body = @{ spa = @{ redirectUris = @($redirectUri, $redirectUriBare) } } | ConvertTo-Json -Compress
-az rest --method PATCH `
-    --url "https://graph.microsoft.com/v1.0/applications/$objId" `
-    --headers "Content-Type=application/json" `
-    --body $body | Out-Null
+$jsonPath = Join-Path ([System.IO.Path]::GetTempPath()) "api-center-portal-$([guid]::NewGuid()).json"
+try {
+    $body | Set-Content -Path $jsonPath -Encoding utf8NoBOM
+    az rest --method PATCH `
+        --url "https://graph.microsoft.com/v1.0/applications/$objId" `
+        --headers "Content-Type=application/json" `
+        --body "@$jsonPath" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to configure the portal redirect URI."
+        exit 1
+    }
+}
+finally {
+    Remove-Item -Path $jsonPath -Force -ErrorAction SilentlyContinue
+}
 Write-Host "Redirect URI configured."
 
 # Ensure a service principal exists so role assignments can target the app.
 az ad sp show --id $appId 2>$null | Out-Null
-if ($LASTEXITCODE -ne 0) { az ad sp create --id $appId | Out-Null }
+if ($LASTEXITCODE -ne 0) {
+    az ad sp create --id $appId | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to create the app registration's service principal."
+        exit 1
+    }
+}
 
 azd env set PORTAL_ENTRA_CLIENT_ID $appId
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to store PORTAL_ENTRA_CLIENT_ID in the azd environment."
+    exit 1
+}
 Write-Host ""
 Write-Host "Done. Client ID $appId stored in the azd environment."
 Write-Host "Run 'azd up' to publish the Entra-protected API Center portal."
