@@ -96,7 +96,8 @@ if ([string]::IsNullOrWhiteSpace($objId)) {
 $body = @{ spa = @{ redirectUris = @($redirectUri, $redirectUriBare) } } | ConvertTo-Json -Compress
 $jsonPath = Join-Path ([System.IO.Path]::GetTempPath()) "api-center-portal-$([guid]::NewGuid()).json"
 try {
-    $body | Set-Content -Path $jsonPath -Encoding utf8NoBOM
+    $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($jsonPath, $body, $utf8WithoutBom)
     az rest --method PATCH `
         --url "https://graph.microsoft.com/v1.0/applications/$objId" `
         --headers "Content-Type=application/json" `
