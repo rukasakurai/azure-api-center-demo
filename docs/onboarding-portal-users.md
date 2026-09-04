@@ -10,13 +10,55 @@ A user signs in and sees:
 
 > You don't have permission to access this developer portal. Please contact this developer portal's administrator for assistance.
 
-The portal uses `azureRbac` auth, so signing in is not enough: the identity also needs the **Azure API Center Data Reader** role on the API Center service.
+The portal uses delegated API Center permission and `azureRbac`, so signing in is not enough. Tenant-wide consent must cover the portal app, and the identity must receive **Azure API Center Data Reader** through the configured reader security group.
 
-## What an admin needs to do
+## Confirm the portal is ready first
 
-1. **Prerequisites.** Be signed in with `az login` to the tenant/subscription hosting the API Center, with permission to assign roles (Owner or User Access Administrator at the resource/resource-group scope).
-2. **Grant the role — prefer a group.** Per-user assignments don't scale. Assign **Azure API Center Data Reader** once to an Entra group (the `CATALOG_READERS_PRINCIPAL_ID` group from README step 2) and onboard people by adding them to it; assign to a single user only for one-offs.
-3. **External users first need a guest invite.** Portal sign-in is tenant-scoped: a user from a different tenant must be invited as a guest and **accept** before any role assignment lets them in.
-4. **Verify and follow up.** Confirm the assignment, then tell the user role propagation can take a few minutes and to **sign out and back in** if the error persists.
+Run the read-only check with an identity allowed to inspect the relevant app,
+consent, group, and Azure RBAC state:
 
-The `onboard-portal-user` skill (linked above) carries the exact `az` commands for each of these.
+```powershell
+pwsh ./scripts/check-portal-readiness.ps1
+```
+
+Stop if the result is `failed` or `unverified`. Fixing app permission or consent
+belongs to a tenant application administrator. Fixing the group RBAC assignment
+belongs to an Azure RBAC administrator. Do not work around either failure with a
+direct per-user role assignment.
+
+## Onboard the user
+
+1. **Resolve the user object.** Use the object in the portal's resource tenant.
+2. **External users must redeem an invitation.** Invite the user through normal
+   Microsoft Entra B2B processes and wait for redemption before continuing.
+3. **Add the user to the configured reader group.** A group owner or directory
+   administrator performs this directory mutation. Do not create a different
+   group or add a direct API Center role for one user.
+4. **If enterprise-app assignment is required,** confirm that the reader group is
+   assigned to the portal enterprise application. This is separate from API
+   Center RBAC; nested group membership does not satisfy enterprise-app
+   assignment.
+5. **Verify effective RBAC** after propagation:
+
+   ```bash
+   az role assignment list \
+     --assignee "<resource-tenant-user-object-id>" \
+     --scope "<api-center-resource-id>" \
+     --include-groups \
+     --include-inherited \
+     --all \
+     --query "[?roleDefinitionName=='Azure API Center Data Reader'].roleDefinitionName" \
+     --output tsv
+   ```
+
+6. **Verify the actual experience.** Have the user start a clean browser session,
+   sign in to the exact portal, search the catalog, and open an asset. A role
+   listing alone does not prove that consent, Conditional Access, MFA, guest
+   redemption, token acquisition, and live data-plane authorization all work.
+
+Tell the user that propagation can take a few minutes and that a fresh sign-in
+may be needed. The [`onboard-portal-user`](../skills/onboard-portal-user/SKILL.md)
+skill carries the generic commands and public-safety rules.
+
+See [API Center portal access model](portal-access-model.md) for the evidence and
+the positive/negative acceptance controls.

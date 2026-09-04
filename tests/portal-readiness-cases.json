@@ -1,0 +1,140 @@
+{
+  "baseline": {
+    "inputs": {
+      "apiCenterConfigured": true,
+      "portalClientConfigured": true,
+      "readersGroupConfigured": true
+    },
+    "portal": {
+      "inspectable": true,
+      "exists": true,
+      "enabled": true,
+      "authMode": "azureRbac",
+      "anonymousAccess": false,
+      "tenantMatches": true,
+      "clientMatches": true
+    },
+    "application": {
+      "inspectable": true,
+      "exists": true,
+      "singleTenant": true,
+      "redirectUriMatches": true,
+      "clientServicePrincipalExists": true,
+      "scopeResolution": "Data.Read.All",
+      "permissionConfigured": true,
+      "consentInspectable": true,
+      "tenantWideConsent": true
+    },
+    "reader": {
+      "inspectable": true,
+      "exists": true,
+      "securityEnabled": true,
+      "rbacInspectable": true,
+      "dataReaderAtServiceScope": true
+    },
+    "anonymousProbe": {
+      "inspectable": true,
+      "statusCode": 401
+    },
+    "testPrincipal": {
+      "requested": false,
+      "inspectable": false,
+      "effectiveDataReader": false
+    }
+  },
+  "cases": [
+    {
+      "name": "ready",
+      "expectedStatus": "ready",
+      "expectedExitCode": 0,
+      "overrides": {}
+    },
+    {
+      "name": "missing-tenant-wide-consent",
+      "expectedStatus": "failed",
+      "expectedExitCode": 1,
+      "overrides": {
+        "application.tenantWideConsent": false
+      }
+    },
+    {
+      "name": "missing-portal-application",
+      "expectedStatus": "failed",
+      "expectedExitCode": 1,
+      "overrides": {
+        "application.exists": false
+      }
+    },
+    {
+      "name": "missing-delegated-scope",
+      "expectedStatus": "failed",
+      "expectedExitCode": 1,
+      "overrides": {
+        "application.scopeResolution": "missing",
+        "application.permissionConfigured": false
+      }
+    },
+    {
+      "name": "missing-reader-rbac",
+      "expectedStatus": "failed",
+      "expectedExitCode": 1,
+      "overrides": {
+        "reader.dataReaderAtServiceScope": false
+      }
+    },
+    {
+      "name": "wrong-reader-principal-type",
+      "expectedStatus": "failed",
+      "expectedExitCode": 1,
+      "overrides": {
+        "reader.securityEnabled": false
+      }
+    },
+    {
+      "name": "anonymous-access-enabled",
+      "expectedStatus": "failed",
+      "expectedExitCode": 1,
+      "overrides": {
+        "portal.anonymousAccess": true,
+        "anonymousProbe.statusCode": 200
+      }
+    },
+    {
+      "name": "graph-inspection-denied",
+      "expectedStatus": "unverified",
+      "expectedExitCode": 2,
+      "overrides": {
+        "application.inspectable": false,
+        "reader.inspectable": false
+      }
+    },
+    {
+      "name": "legacy-scope-compatible",
+      "expectedStatus": "ready",
+      "expectedExitCode": 0,
+      "overrides": {
+        "application.scopeResolution": "user_impersonation"
+      }
+    },
+    {
+      "name": "test-principal-missing-effective-access",
+      "expectedStatus": "failed",
+      "expectedExitCode": 1,
+      "overrides": {
+        "testPrincipal.requested": true,
+        "testPrincipal.inspectable": true,
+        "testPrincipal.effectiveDataReader": false
+      }
+    },
+    {
+      "name": "test-principal-has-configured-group-access",
+      "expectedStatus": "ready",
+      "expectedExitCode": 0,
+      "overrides": {
+        "testPrincipal.requested": true,
+        "testPrincipal.inspectable": true,
+        "testPrincipal.effectiveDataReader": true
+      }
+    }
+  ]
+}

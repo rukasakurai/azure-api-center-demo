@@ -26,7 +26,12 @@ Before you begin, ensure you have:
 
 - **Azure Subscription**: An active Azure subscription where you have appropriate permissions
 - **Azure CLI**: Installed locally for running commands ([Install Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)). Verify with `az version`.
-- **Azure Permissions**: Ability to create app registrations (Microsoft Entra ID) and assign roles (typically requires Contributor or Owner role)
+- **Microsoft Entra permission**: Ability to create the OIDC app registration
+  (for example, through the tenant's app-registration policy or an appropriate
+  directory role)
+- **Azure permissions**: Contributor for resource deployment plus Role Based
+  Access Control Administrator, User Access Administrator, or Owner for role
+  assignment at the persistent resource-group scope
 - **GitHub Repository**: Admin access to the GitHub repository where you want to configure OIDC
 - **GitHub Repository Settings**: Ensure your repository has Actions enabled
 
@@ -188,6 +193,12 @@ The workflow intentionally does not create or delete the resource group. If
 the group is deleted, an administrator must restore it and these assignments
 before GitHub can deploy again.
 
+These Azure roles do not grant Microsoft Graph directory access. Keep normal
+deployment separate from portal app consent, reader-group membership, guest
+invitations, and enterprise-application assignment. This repository does not
+grant the GitHub OIDC identity broad Graph write permissions to automate those
+tenant-owned operations.
+
 Verify both assignments:
 
 ```bash
@@ -246,13 +257,19 @@ This repository includes a workflow to validate your Azure OIDC configuration.
    blocked from the `demo` Environment.
 
 4. **Monitor the workflow run**:
-   - ✅ If successful, your Azure OIDC is configured correctly
-   - ❌ If it fails, check the [Troubleshooting](#troubleshooting) section below
+   - A successful connectivity check means the workload identity can reach the
+     configured Azure resource group.
+   - A failure means the OIDC or Azure RBAC setup needs attention.
 
 The workflow performs the following checks:
 - Verifies required `demo` Environment variables/secrets are configured
 - Attempts to authenticate with Azure using OIDC
 - Confirms access to the persistent resource group
+
+This check does not prove that portal users can sign in. The **Deploy Demo**
+workflow separately reports protected-portal readiness as `ready`, `failed`, or
+`unverified`, and a clean-browser non-owner test remains required. See
+[API Center portal access model](portal-access-model.md).
 
 ## Troubleshooting
 

@@ -37,6 +37,10 @@ jobs:
       - name: Install azd
         uses: Azure/setup-azd@v2
 
+      - name: Run portal access contract tests
+        shell: pwsh
+        run: ./tests/Test-PortalReadiness.ps1
+
       - name: Azure Login via OIDC
         uses: azure/login@v2
         with:
@@ -87,10 +91,19 @@ jobs:
             sleep "$WAIT"
           done
 
-      - name: Run tests
+      - name: Verify provisioned API Center
         run: |
-          echo "Add your E2E test commands here."
-          echo "For example: pytest tests/e2e/ or npm test"
+          API_CENTER_RESOURCE_ID="$(azd env get-value apiCenterResourceId)"
+          if [ -z "$API_CENTER_RESOURCE_ID" ] || [ "$API_CENTER_RESOURCE_ID" = "null" ]; then
+            echo "::error::The deployment did not produce apiCenterResourceId."
+            exit 1
+          fi
+          az resource show --ids "$API_CENTER_RESOURCE_ID" --output none
+
+          if [ "$(azd env get-value portalInfrastructureConfigured)" != "false" ]; then
+            echo "::error::The isolated E2E deployment unexpectedly published a portal without identity inputs."
+            exit 1
+          fi
 
       - name: Cleanup (azd down)
         if: always() && (inputs.cleanup != false || github.event_name == 'pull_request')

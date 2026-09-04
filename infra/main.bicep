@@ -19,16 +19,8 @@ param usecaseCoachMcpEndpoint string = ''
 
 var hasMcpEndpoint = !empty(usecaseCoachMcpEndpoint)
 
-@description('Optional Microsoft Entra object ID (a group is recommended) granted read access to the catalog so people in your tenant can discover the registered assets. Leave empty to skip. Set it with "azd env set CATALOG_READERS_PRINCIPAL_ID <objectId>" so no tenant-specific ID is committed to this public repository.')
+@description('Optional Microsoft Entra security-group object ID granted read access to the catalog. A group is the supported private-portal authorization model. Leave empty only when the portal is not published or an explicitly isolated anonymous test is being deployed. Set it with "azd env set CATALOG_READERS_PRINCIPAL_ID <objectId>" so no tenant-specific ID is committed to this public repository.')
 param catalogReadersPrincipalId string = ''
-
-@description('Principal type of catalogReadersPrincipalId. Use "Group" for an Entra group (recommended) or "User" for a single user.')
-@allowed([
-  'Group'
-  'User'
-  'ServicePrincipal'
-])
-param catalogReadersPrincipalType string = 'Group'
 
 var hasCatalogReaders = !empty(catalogReadersPrincipalId)
 
@@ -217,14 +209,14 @@ resource agentSkillsSource 'Microsoft.ApiCenter/services/workspaces/apiSources@2
   ]
 }
 
-@description('Optional: grant a group (or user) read access to the catalog so its members can discover the registered assets in the Azure portal and tooling. Created only when a principal ID is supplied.')
+@description('Optional: grant a security group read access to the catalog so its members can use the portal and API Center data plane. Created only when a group object ID is supplied.')
 resource catalogReadersAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (hasCatalogReaders) {
   name: guid(apiCenter.id, catalogReadersPrincipalId, apiCenterDataReaderRoleId)
   scope: apiCenter
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', apiCenterDataReaderRoleId)
     principalId: catalogReadersPrincipalId
-    principalType: catalogReadersPrincipalType
+    principalType: 'Group'
   }
 }
 
@@ -251,7 +243,15 @@ output agentName string = agent.name
 output mcpServerName string = mcpServer.name
 output mcpEndpointConfigured bool = hasMcpEndpoint
 output catalogReadersConfigured bool = hasCatalogReaders
+@description('Compatibility output: true when the portal resource was included in this ARM deployment. It does not prove delegated consent or end-user access.')
 output portalConfigured bool = configurePortal
+@description('True when the portal resource was included in this ARM deployment. This does not prove delegated consent or end-user access.')
+output portalInfrastructureConfigured bool = configurePortal
+@description('True when the protected portal inputs include both an Entra client ID and a reader-group ID. Runtime consent and non-owner access still require separate verification.')
+output portalPrivateAccessPrerequisitesSupplied bool = configurePortal && !portalAllowAnonymousAccess && hasCatalogReaders
+@description('True when interactive identity and non-owner verification is still required before describing the portal as operational.')
+output portalAccessVerificationRequired bool = configurePortal && !portalAllowAnonymousAccess
 output portalHostname string = any(apiCenter.properties).portalHostname
+output dataApiHostname string = any(apiCenter.properties).dataApiHostname
 output pluginName string = plugin.name
 output agentSkillsRepositoryUrlOutput string = agentSkillsRepositoryUrlEffective

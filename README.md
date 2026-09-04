@@ -89,46 +89,48 @@ Agent Skills are installed and used **as skills** — they don't need to be pack
 
 A person in your Microsoft Entra tenant can discover and connect to the registered MCP server through the **API Center self-service portal** — an Azure-managed website where they sign in with their normal Entra account. They never need their own Azure subscription, the Azure portal, or the `az` CLI. This repo can publish that portal as part of `azd up`.
 
-> **They do, however, need one Azure RBAC role assignment.** The portal's only tenant-restricted auth mode is `azureRbac`, so each viewer's Entra identity must be granted the **Azure API Center Data Reader** role on this resource (step 2 below). The viewer never *uses* Azure — but you (or an admin) make a single role assignment against their identity or, better, an Entra group they belong to. The alternative auth mode, `allowAnonymousAccess: true`, would make the portal fully public and is intentionally not used here.
+> **Sign-in alone is not sufficient.** The managed portal uses delegated API Center permission plus Azure RBAC. A tenant administrator must establish consent, and each viewer must receive **Azure API Center Data Reader** through the configured Entra security group. The viewer never uses Azure directly. `allowAnonymousAccess: true` would make catalog data readable without sign-in and is not the private portal model.
+
+See [docs/portal-access-model.md](docs/portal-access-model.md) for the public product evidence, repository decisions, self-hosting boundary, B2B guidance, and unresolved points.
 
 > **Do you even need the portal?** The MCP server is reached over a single endpoint URL, so sharing that link in a Teams channel, wiki, or doc is a perfectly valid way for people to discover and connect. The portal adds value only when you want a **governed, searchable catalog** (multiple servers/APIs, filtering, a single front door) rather than a copy-pasted link. If a link is enough today, skip the portal and just share the endpoint.
 
-The portal is the `Microsoft.ApiCenter/services/portals` resource (`infra/main.bicep`). It is configured for `azureRbac` auth and sign-in is restricted to your tenant. Two pieces are required:
+The portal is the `Microsoft.ApiCenter/services/portals` resource (`infra/main.bicep`). It is configured for `azureRbac`, sign-in is restricted to your tenant, and anonymous access defaults to disabled. Three identity prerequisites are required:
 
-1. **A Microsoft Entra app registration** for the portal sign-in (needs Entra *directory* permissions, which a plain Azure subscription owner may not have — so it is a separate, idempotent helper script rather than part of the template):
+1. **A Microsoft Entra app registration** for portal sign-in. This needs Entra directory permissions, which Azure subscription ownership does not imply, so it is a separate idempotent helper rather than an ARM resource:
 
    ```bash
    azd up                              # first provision creates the API Center (portal skipped)
-   ./scripts/register-portal-app.sh    # registers the Entra app, stores its client ID in azd
+   ./scripts/register-portal-app.sh    # configures the app and delegated permission
    #   PowerShell: ./scripts/register-portal-app.ps1
-   azd up                              # publishes the Entra-protected portal
    ```
 
-   The script reads the portal hostname from the deployment, registers (or reuses) a portal-specific app with the correct single-page-application redirect URI, and sets `PORTAL_ENTRA_CLIENT_ID` in your azd environment. Its default display name includes the API Center service name so it cannot accidentally reuse an unrelated tenant-wide app with a generic name. You can also bring your own app and set it directly:
+   The script registers or safely reuses a portal-specific single-tenant app, preserves existing SPA redirect URIs, resolves the tenant's current API Center delegated scope, and stores `PORTAL_ENTRA_CLIENT_ID` in the azd environment. Its default display name includes the API Center service name so it cannot accidentally reuse an unrelated tenant-wide app with a generic name. You can also bring your own app and set its client ID directly.
 
-   ```bash
-   azd env set PORTAL_ENTRA_CLIENT_ID <app-client-id>
-   azd up
-   ```
+2. **Administrator consent.** A tenant administrator reviews the API permission on the portal app and grants consent for the organization. This is separate from app registration and cannot be inferred from a successful ARM deployment. In a tenant that permits user consent, an individual flow may work, but it is not the predictable reusable baseline.
 
-2. **Reader access for viewers.** Portal data is governed by the **Azure API Center Data Reader** role. Grant a group so its members can browse assets:
+3. **Reader-group authorization.** Supply an existing security-group object ID. The Bicep deployment assigns **Azure API Center Data Reader** to that group at the API Center resource:
 
    ```bash
    azd env set CATALOG_READERS_PRINCIPAL_ID <entra-group-object-id>
-   azd up
+   azd up                              # publishes the protected portal and group RBAC
+   pwsh ./scripts/check-portal-readiness.ps1
    ```
 
-Once published, people open `https://<service>.portal.<region>.azure-apicenter.ms`, sign in with their Entra account, find the `usecase-coach-mcp` server, and copy its runtime endpoint to register it in any MCP-capable HTTP client (for example a Microsoft 365 Copilot agent built in [Copilot Studio](https://learn.microsoft.com/microsoft-copilot-studio/) or the [Microsoft 365 Agents Toolkit](https://learn.microsoft.com/microsoft-365-copilot/extensibility/)). Any Entra protection on the endpoint still applies when they connect.
+The readiness command is read-only and returns `ready`, `failed`, or `unverified`. Even `ready` covers static configuration only. Complete the documented clean-browser test with a non-owner whose only entitlement is reader-group membership before describing the portal as operational.
+
+Once that test passes, people open `https://<service>.portal.<region>.azure-apicenter.ms`, sign in with their Entra account, find the `usecase-coach-mcp` server, and copy its runtime endpoint to register it in any MCP-capable HTTP client (for example a Microsoft 365 Copilot agent built in [Copilot Studio](https://learn.microsoft.com/microsoft-copilot-studio/) or the [Microsoft 365 Agents Toolkit](https://learn.microsoft.com/microsoft-365-copilot/extensibility/)). Any Entra protection on the endpoint still applies when they connect.
 
 > When a user reports the *"You don't have permission to access this developer portal"* error, see [docs/onboarding-portal-users.md](docs/onboarding-portal-users.md) for how to grant access.
 
-> Fully hands-off alternative: the app registration can instead be created in the same deployment with the [Microsoft Graph Bicep extension](https://learn.microsoft.com/graph/templates/bicep/overview-bicep-templates-for-graph) (`Microsoft.Graph/applications` + `servicePrincipals`), giving a true single-`azd up`. It is not the default here because it requires the preview extension plus directory permissions for every deployer.
+> This repository intentionally does not create groups, manage members, invite guests, or grant tenant-wide consent. Those actions require separate directory authority and tenant-specific decisions. Giving the normal GitHub deployment identity broad Microsoft Graph write permissions would make the workflow unattended, but not portable or least-privilege.
 
 ## Prerequisites
 
 - Azure subscription with permission to create resources
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
 - [Azure Developer CLI (`azd`)](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd)
+- [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell) for the cross-platform portal readiness check
 - Authenticated Azure session (`az login`)
 
 ## Quick start
@@ -170,7 +172,10 @@ The OIDC application needs a federated credential scoped to
 `environment:demo`. Grant its service principal `Contributor` plus the
 permission required to manage role assignments at the persistent resource
 group scope. The workflow intentionally does not create or delete that
-resource group.
+resource group. It also does not receive Microsoft Graph write permissions.
+The workflow reports infrastructure provisioning separately from portal
+identity readiness; lack of directory inspection is reported as `unverified`,
+not as proof of access.
 
 ## Customize the demo
 
@@ -204,4 +209,7 @@ azd down --force --purge
 - `azure.yaml` - Azure Developer CLI project definition
 - `infra/main.bicep` - Infrastructure for Azure API Center and the demo agent, MCP server, skill, and plugin assets, plus the optional Entra-protected discovery portal
 - `infra/main.parameters.json` - Maps azd environment variables (`USECASE_COACH_MCP_ENDPOINT`, `CATALOG_READERS_PRINCIPAL_ID`, `PORTAL_ENTRA_CLIENT_ID`) to the deployment (keeps tenant-specific values out of source control)
-- `scripts/register-portal-app.sh` / `.ps1` - Idempotently registers the Microsoft Entra app for the discovery portal and stores its client ID in the azd environment
+- `scripts/register-portal-app.sh` / `.ps1` - Idempotently configures the portal app, redirect URIs, and delegated permission
+- `scripts/check-portal-readiness.ps1` - Read-only protected-portal configuration, consent, group/RBAC, and anonymous-denial checks
+- `docs/portal-access-model.md` - Evidence, implementation boundary, readiness states, and non-owner acceptance procedure
+- `tests/portal-readiness-cases.json` / `Test-PortalReadiness.ps1` - Sanitized dependency-free readiness contract tests

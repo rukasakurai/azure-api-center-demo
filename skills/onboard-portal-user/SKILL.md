@@ -1,12 +1,12 @@
 ---
 name: onboard-portal-user
-description: Onboard a person to the Azure API Center Entra-protected discovery portal. Grants the required Azure RBAC role (optionally via an Entra guest invite) and drafts a Japanese message telling the user how to sign in and use the portal. Use when someone needs access to the API Center portal or reports the "You don't have permission to access this developer portal" error.
+description: Onboard a person to the Azure API Center Entra-protected discovery portal through the configured reader security group (optionally after an Entra B2B guest invite), verify effective access, and draft a Japanese usage message. Use when someone needs portal access or reports the "You don't have permission to access this developer portal" error.
 argument-hint: The user's email/UPN (and optionally their display name) to onboard
 ---
 
 # Onboard Portal User
 
-Grant a person access to the Azure API Center discovery portal and tell them how to use it. The portal uses `azureRbac` auth, so a viewer must (a) exist in the portal's Entra tenant and (b) hold the **Azure API Center Data Reader** role on the API Center service. This skill walks an administrator through satisfying both, then drafts a Japanese message for the user.
+Grant a person access to the Azure API Center discovery portal and tell them how to use it. The supported model requires a ready portal app/consent configuration and **Azure API Center Data Reader** through the configured reader security group. This skill verifies the baseline, adds the resource-tenant user object to that group, checks effective access, and drafts a Japanese message.
 
 ## When to Use
 
@@ -16,24 +16,34 @@ Grant a person access to the Azure API Center discovery portal and tell them how
 
 ## Non-Negotiables (must follow)
 
-1. **Confirm before every external mutation.** Sending a guest invitation and creating a role assignment both change directory/Azure state. Show the exact command and the resolved target identity, then ask the operator to confirm before running it.
+1. **Confirm before every external mutation.** Sending a guest invitation and adding a group member both change directory state. Show the exact command and the resolved target identity, then ask the operator to confirm before running it.
 2. **Never expose non-public details in committed artifacts.** This repository is public. Real names, email addresses, object IDs, tenant/subscription IDs, resource IDs, and hostnames may appear in your live session output, but must never be written into files, commits, issues, or PRs. Use placeholders there.
-3. **Privileged operation.** The operator must be signed in (`az login`) to the tenant/subscription that hosts the API Center, with permission to assign roles (and to invite guests, if needed).
-4. **Prefer groups at scale.** A one-off direct user assignment is fine, but if a readers group exists, prefer adding the user to it over a per-user role assignment.
-5. **Grant only the read-only role.** The only role this skill assigns is **Azure API Center Data Reader**. Never substitute a broader role or run other grant commands.
+3. **Privileged operation.** The operator must be signed in to the portal's resource tenant with permission to inspect the portal baseline and manage membership of the configured reader group (and invite guests, if needed).
+4. **Group-only onboarding.** Do not create a direct per-user API Center role assignment. If the configured group or its Data Reader assignment is missing, stop and route the baseline failure to the appropriate directory or Azure RBAC administrator.
+5. **No consent mutation.** Do not grant delegated consent or change enterprise-application assignment in this skill. Report those as administrator prerequisites.
 
 ## Inputs
 
 - The user's **email / UPN** (required) and **display name** (helpful for lookup and the message).
-- Optionally, the **API Center resource ID** and **portal URL**. If omitted, read them from the azd environment:
+- Optionally, the **API Center resource ID**, **portal URL**, and **reader group ID**. If omitted, read them from the azd environment:
 
   ```bash
-  azd env get-values | grep -E 'apiCenterResourceId|portalHostname'
+  azd env get-values | grep -E 'apiCenterResourceId|portalHostname|CATALOG_READERS_PRINCIPAL_ID'
   ```
 
 ## Procedure
 
-### 1. Find the user's identity
+### 1. Verify the protected portal baseline
+
+```powershell
+pwsh ./scripts/check-portal-readiness.ps1
+```
+
+Continue only when the result is `ready`. `failed` identifies a known missing or
+unsafe setting. `unverified` means the current identity could not inspect a
+directory prerequisite; it is not permission to continue.
+
+### 2. Find the user's identity
 
 Requests usually arrive as a **display name** (e.g. from Teams), and some accounts have no `mail` set, so search by display name first (or by email/UPN if that's what you were given: `--filter "mail eq '<email>' or userPrincipalName eq '<email>'"`):
 
@@ -43,11 +53,11 @@ az ad user list \
   --query "[].{name:displayName, upn:userPrincipalName, id:id, mail:mail}" -o table
 ```
 
-- **Exactly one match** → note the `id` and continue to step 3.
+- **Exactly one match** → note the resource-tenant object `id` and continue to step 4.
 - **Multiple matches** → disambiguate with the operator (e.g. by UPN) and use the correct `id`.
-- **No match** → the user is external to the tenant; go to step 2 first.
+- **No match** → the user is external to the tenant; go to step 3 first.
 
-### 2. Invite as a guest (only if not found)
+### 3. Invite as a guest (only if not found)
 
 External users must be invited and must **accept** the invitation before they can sign in. Confirm with the operator, then:
 
@@ -57,44 +67,58 @@ az rest --method POST \
   --body '{"invitedUserEmailAddress":"<email>","inviteRedirectUrl":"<portal-url>","sendInvitationMessage":true}'
 ```
 
-Tell the operator that **the user must accept the invitation** (and that acceptance is manual and asynchronous) before the role assignment will let them in. Re-run step 1 to confirm the guest object now exists.
+Tell the operator that **the user must accept the invitation** before group membership can produce a usable sign-in. Re-run step 2 and use the resulting resource-tenant guest object ID.
 
-### 3. Assign the Data Reader role
+### 4. Add the user to the configured reader group
 
-Grant the **Azure API Center Data Reader** role on the API Center service, using the object `id` you confirmed in step 1.
-
-```bash
-SCOPE="$(azd env get-values | sed -n 's/^apiCenterResourceId="\(.*\)"$/\1/p')"
-
-# Per-user (USER_ID is the object id from step 1):
-az role assignment create --assignee-object-id "<user-object-id>" --assignee-principal-type User \
-  --role "Azure API Center Data Reader" --scope "$SCOPE"
-
-# Group-based (preferred at scale; pass the group object id):
-az role assignment create --assignee-object-id "<group-object-id>" --assignee-principal-type Group \
-  --role "Azure API Center Data Reader" --scope "$SCOPE"
-```
-
-If the assignment already exists, `create` returns an "already exists" error — treat that as success.
-
-For the group path, also add the user to the group:
+Resolve the configured group and confirm it is the expected security group before
+mutating membership:
 
 ```bash
-az ad group member add --group "<group-id-or-name>" --member-id "<user-object-id>"
+az ad group show --group "<configured-reader-group-object-id>" \
+  --query "{name:displayName,id:id,securityEnabled:securityEnabled}" -o table
 ```
 
-### 4. Verify
+Show the resolved user and group to the operator and confirm, then:
 
-The `create` response reports `roleDefinitionName` as `null`, so it looks inconclusive — this list command is the real confirmation. It should print `Azure API Center Data Reader`:
+```bash
+az ad group member add \
+  --group "<configured-reader-group-object-id>" \
+  --member-id "<resource-tenant-user-object-id>"
+```
+
+If the portal enterprise application has "assignment required" enabled, a tenant
+application administrator must also ensure this same group is assigned there.
+Nested group membership does not satisfy enterprise-application assignment.
+
+### 5. Verify effective access
+
+Confirm direct group membership:
+
+```bash
+az ad group member check \
+  --group "<configured-reader-group-object-id>" \
+  --member-id "<resource-tenant-user-object-id>"
+```
+
+Then confirm group-derived Data Reader:
 
 ```bash
 az role assignment list \
-  --assignee "<user-object-id>" \
+  --assignee "<resource-tenant-user-object-id>" \
   --scope "<api-center-resource-id>" \
-  --query "[].roleDefinitionName" -o tsv
+  --include-groups \
+  --include-inherited \
+  --all \
+  --query "[?roleDefinitionName=='Azure API Center Data Reader'].roleDefinitionName" \
+  -o tsv
 ```
 
-### 5. Draft the Japanese message
+Finally, ask the user to sign in through a clean browser profile and confirm that
+catalog search and asset details load. A role listing alone does not exercise
+consent, Conditional Access, MFA, guest redemption, or browser token acquisition.
+
+### 6. Draft the Japanese message
 
 Produce a short, friendly Japanese message for the user. Write from the **recipient's** perspective — avoid internal/admin concepts such as "tenant" or RBAC. Choose the variant that matches the user's situation rather than asking them to figure out which case applies: include the invitation-acceptance step **only** if you invited them as a guest. Remind them that access may take a few minutes to take effect and a fresh sign-in may be needed. Use the portal URL from the azd environment.
 
@@ -127,3 +151,4 @@ If you invited the user as a guest, add a first step before signing in, in plain
 
 - This is an administrator tool. It is intentionally not registered in the public discovery catalog.
 - Background and the equivalent manual runbook live in [docs/onboarding-portal-users.md](../../docs/onboarding-portal-users.md).
+- The evidence and readiness-state definitions live in [docs/portal-access-model.md](../../docs/portal-access-model.md).

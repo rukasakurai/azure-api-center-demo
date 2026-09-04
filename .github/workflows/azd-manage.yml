@@ -48,6 +48,18 @@ jobs:
             fi
           done
 
+          case "$PORTAL_ALLOW_ANONYMOUS_ACCESS" in
+            true|false) ;;
+            *)
+              echo "::error::PORTAL_ALLOW_ANONYMOUS_ACCESS must be exactly 'true' or 'false'"
+              exit 1
+              ;;
+          esac
+
+          if [ "$PORTAL_ALLOW_ANONYMOUS_ACCESS" = "true" ]; then
+            echo "::warning::Anonymous catalog access is explicitly enabled. This is not the private discovery-portal model."
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -91,4 +103,63 @@ jobs:
           azd env set USECASE_COACH_MCP_ENDPOINT "$USECASE_COACH_MCP_ENDPOINT"
 
       - name: Deploy demo
+        id: deploy_demo
         run: azd up --no-prompt
+
+      - name: Check protected portal readiness
+        id: portal_readiness
+        if: env.PORTAL_ALLOW_ANONYMOUS_ACCESS == 'false'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $json = & pwsh -NoProfile -File ./scripts/check-portal-readiness.ps1 -OutputFormat json
+          $exitCode = $LASTEXITCODE
+          if ([string]::IsNullOrWhiteSpace(($json | Out-String))) {
+            $exitCode = 1
+          }
+          else {
+            $json | Set-Content -LiteralPath portal-readiness.json -Encoding utf8
+          }
+          "exit_code=$exitCode" >> $env:GITHUB_OUTPUT
+          exit $exitCode
+
+      - name: Report portal completion state
+        if: always()
+        shell: pwsh
+        run: |
+          "## Deployment result" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          $deploymentOutcome = "${{ steps.deploy_demo.outcome }}"
+          if ($deploymentOutcome -ne "success") {
+            "- Infrastructure provisioning: **$deploymentOutcome**." >> $env:GITHUB_STEP_SUMMARY
+            "- Portal identity readiness was not evaluated." >> $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+          "- Infrastructure provisioning: **completed**." >> $env:GITHUB_STEP_SUMMARY
+
+          if ($env:PORTAL_ALLOW_ANONYMOUS_ACCESS -eq "true") {
+            "- Anonymous catalog access was explicitly enabled; private portal readiness was not evaluated." >> $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+
+          if (-not (Test-Path -LiteralPath portal-readiness.json)) {
+            "- Private portal readiness: **failed** (the readiness checker did not return a result)." >> $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+
+          $result = Get-Content -LiteralPath portal-readiness.json -Raw | ConvertFrom-Json
+          "- Static private portal readiness: **$($result.status)**." >> $env:GITHUB_STEP_SUMMARY
+          foreach ($check in $result.checks) {
+            "- $($check.outcome): $($check.message)" >> $env:GITHUB_STEP_SUMMARY
+          }
+          "- A clean-browser non-owner acceptance test is still required before declaring the portal operational." >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Fail known portal misconfiguration
+        if: >-
+          env.PORTAL_ALLOW_ANONYMOUS_ACCESS == 'false' &&
+          steps.portal_readiness.outputs.exit_code != '0' &&
+          steps.portal_readiness.outputs.exit_code != '2'
+        shell: bash
+        run: |
+          echo "::error::The protected portal has a known configuration failure. Review the deployment summary."
+          exit 1
